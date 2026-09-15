@@ -287,7 +287,9 @@
     async function uploadPhotos(files) {
       const urls = [];
       for (const file of files) {
-        const path = `${crypto.randomUUID()}/${file.name}`;
+        const extMatch = file.name.match(/\.[a-zA-Z0-9]+$/);
+        const ext = extMatch ? extMatch[0].toLowerCase() : "";
+        const path = `${crypto.randomUUID()}${ext}`;
         const { error } = await supabaseClient.storage.from("item-photos").upload(path, file);
         if (error) throw error;
         const { data } = supabaseClient.storage.from("item-photos").getPublicUrl(path);
