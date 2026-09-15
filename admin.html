@@ -64,9 +64,12 @@
         <option value="sold">Sold</option>
       </select>
 
-      <label for="photos">Photos (you can select multiple)</label>
-      <input type="file" id="photos" accept="image/*" multiple />
+      <label>Current Photos</label>
+      <div class="btn-row" id="photoManager"></div>
       <p class="hint" id="existingPhotosNote"></p>
+
+      <label for="photos">Add Photos</label>
+      <input type="file" id="photos" accept="image/*" multiple />
 
       <div class="btn-row">
         <button class="btn" id="saveBtn">Save Item</button>
@@ -86,6 +89,7 @@
   <script>
     let items = [];
     let editingId = null;
+    let editingPhotoUrls = [];
 
     const loginView = document.getElementById("loginView");
     const adminView = document.getElementById("adminView");
@@ -217,10 +221,35 @@
       return div.innerHTML;
     }
 
+    function renderPhotoManager() {
+      const managerEl = document.getElementById("photoManager");
+      managerEl.innerHTML = "";
+      editingPhotoUrls.forEach((url, index) => {
+        const wrap = document.createElement("div");
+        wrap.style.position = "relative";
+        wrap.innerHTML = `
+          <img src="${url}" alt="" style="width:70px;height:70px;object-fit:cover;border-radius:6px;display:block;" />
+          <button type="button" data-remove-index="${index}" title="Remove photo"
+            style="position:absolute;top:-6px;right:-6px;background:#7a2e2e;color:#fff;border:none;border-radius:50%;width:20px;height:20px;line-height:1;cursor:pointer;">&times;</button>
+        `;
+        managerEl.appendChild(wrap);
+      });
+      managerEl.querySelectorAll("[data-remove-index]").forEach((btn) =>
+        btn.addEventListener("click", () => {
+          editingPhotoUrls.splice(Number(btn.dataset.removeIndex), 1);
+          renderPhotoManager();
+        })
+      );
+      document.getElementById("existingPhotosNote").textContent = editingPhotoUrls.length
+        ? ""
+        : "No photos yet.";
+    }
+
     function startEdit(id) {
       const item = items.find((i) => i.id === id);
       if (!item) return;
       editingId = id;
+      editingPhotoUrls = [...(item.photo_urls || [])];
       document.getElementById("formTitle").textContent = `Edit: ${item.title}`;
       document.getElementById("title").value = item.title || "";
       document.getElementById("category").value = item.category || "games";
@@ -231,16 +260,14 @@
       document.getElementById("quantity").value = item.quantity || 1;
       document.getElementById("status").value = item.status || "available";
       document.getElementById("photos").value = "";
-      document.getElementById("existingPhotosNote").textContent =
-        item.photo_urls && item.photo_urls.length
-          ? `${item.photo_urls.length} existing photo(s). Selecting new photos below will replace them.`
-          : "No existing photos.";
+      renderPhotoManager();
       document.getElementById("cancelEditBtn").hidden = false;
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
     function resetForm() {
       editingId = null;
+      editingPhotoUrls = [];
       document.getElementById("formTitle").textContent = "Add New Item";
       document.getElementById("title").value = "";
       document.getElementById("category").value = "games";
@@ -251,7 +278,7 @@
       document.getElementById("quantity").value = 1;
       document.getElementById("status").value = "available";
       document.getElementById("photos").value = "";
-      document.getElementById("existingPhotosNote").textContent = "";
+      renderPhotoManager();
       document.getElementById("cancelEditBtn").hidden = true;
     }
 
@@ -294,8 +321,10 @@
       const fileInput = document.getElementById("photos");
       try {
         if (fileInput.files.length > 0) {
-          payload.photo_urls = await uploadPhotos(fileInput.files);
+          const newUrls = await uploadPhotos(fileInput.files);
+          editingPhotoUrls.push(...newUrls);
         }
+        payload.photo_urls = editingPhotoUrls;
 
         if (editingId) {
           const { error } = await supabaseClient.from("items").update(payload).eq("id", editingId);
@@ -351,6 +380,7 @@
       }
     }
 
+    renderPhotoManager();
     checkSession();
   </script>
 </body>
