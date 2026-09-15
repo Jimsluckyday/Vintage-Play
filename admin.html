@@ -8,6 +8,12 @@
 </head>
 <body>
 
+  <div id="versionBanner" class="version-banner" hidden>
+    A newer version of this page is available.
+    <button id="versionRefreshBtn">Refresh Now</button>
+  </div>
+  <div class="version-tag">v<span id="versionLabel"></span></div>
+
   <div id="loginView" class="admin-box">
     <h2>Admin Login</h2>
     <label for="loginEmail">Email</label>
@@ -384,6 +390,7 @@
 
     renderPhotoManager();
     checkSession();
+    startVersionWatch();
   </script>
 </body>
 </html>

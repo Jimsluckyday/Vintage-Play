@@ -7,6 +7,11 @@
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
+  <div id="versionBanner" class="version-banner" hidden>
+    A newer version of this page is available.
+    <button id="versionRefreshBtn">Refresh Now</button>
+  </div>
+
   <header>
     <h1>Vintage Play Collectibles</h1>
     <p>Video games &middot; movies &middot; music &middot; toys &middot; comics &middot; sports cards</p>
@@ -102,6 +107,7 @@
       await loadCategories();
       renderFilters();
       loadItems();
+      startVersionWatch();
     }
 
     init();
