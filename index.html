@@ -31,14 +31,17 @@
 
     function renderFilters() {
       const filtersEl = document.getElementById("filters");
-      const options = [{ value: "all", label: "All" }, ...CATEGORIES];
+      const options = [
+        { slug: "all", label: "All" },
+        ...ALL_CATEGORIES.map((c) => ({ slug: c.slug, label: c.label })),
+      ];
       filtersEl.innerHTML = "";
       options.forEach((opt) => {
         const btn = document.createElement("button");
         btn.textContent = opt.label;
-        btn.className = opt.value === activeCategory ? "active" : "";
+        btn.className = opt.slug === activeCategory ? "active" : "";
         btn.addEventListener("click", () => {
-          activeCategory = opt.value;
+          activeCategory = opt.slug;
           renderFilters();
           renderGrid();
         });
@@ -95,8 +98,13 @@
       renderGrid();
     }
 
-    renderFilters();
-    loadItems();
+    async function init() {
+      await loadCategories();
+      renderFilters();
+      loadItems();
+    }
+
+    init();
   </script>
 </body>
 </html>

@@ -25,12 +25,22 @@
     </div>
 
     <div class="section">
+      <h2>Categories</h2>
+      <div class="btn-row">
+        <input type="text" id="newCategoryLabel" placeholder="e.g. Books" style="max-width:250px;" />
+        <button class="btn secondary" id="addCategoryBtn" style="margin-top:0;">Add Category</button>
+      </div>
+      <p class="error-text" id="categoryError" hidden></p>
+    </div>
+
+    <div class="section">
       <h2 id="formTitle">Add New Item</h2>
       <label for="title">Title</label>
       <input type="text" id="title" />
 
       <label for="category">Category</label>
       <select id="category"></select>
+      <p class="hint">Don't see the category you need? Add one below, then it'll appear in this list.</p>
 
       <label for="condition_notes">Condition Notes</label>
       <textarea id="condition_notes" rows="2"></textarea>
@@ -82,12 +92,36 @@
 
     function populateCategorySelect() {
       const select = document.getElementById("category");
-      select.innerHTML = CATEGORIES.map(
-        (c) => `<option value="${c.value}">${c.label}</option>`
+      const previousValue = select.value;
+      select.innerHTML = ALL_CATEGORIES.map(
+        (c) => `<option value="${c.slug}">${c.label}</option>`
       ).join("");
+      if (previousValue) select.value = previousValue;
     }
 
+    document.getElementById("addCategoryBtn").addEventListener("click", async () => {
+      const input = document.getElementById("newCategoryLabel");
+      const errorEl = document.getElementById("categoryError");
+      errorEl.hidden = true;
+
+      const label = input.value.trim();
+      if (!label) return;
+      const slug = slugify(label);
+
+      const { error } = await supabaseClient.from("categories").insert({ slug, label });
+      if (error) {
+        errorEl.textContent = error.message;
+        errorEl.hidden = false;
+        return;
+      }
+      input.value = "";
+      await loadCategories();
+      populateCategorySelect();
+    });
+
     async function checkSession() {
+      await loadCategories();
+      populateCategorySelect();
       const { data } = await supabaseClient.auth.getSession();
       if (data.session) {
         showAdmin();
@@ -317,7 +351,6 @@
       }
     }
 
-    populateCategorySelect();
     checkSession();
   </script>
 </body>

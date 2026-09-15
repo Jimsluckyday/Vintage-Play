@@ -6,16 +6,27 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const CATEGORIES = [
-  { value: "games", label: "Video Games" },
-  { value: "movies", label: "Movies" },
-  { value: "music", label: "Music" },
-  { value: "toys", label: "Toys" },
-  { value: "comics", label: "Comics" },
-  { value: "cards", label: "Sports Cards" },
-];
+// Populated by loadCategories() before the page renders.
+let ALL_CATEGORIES = [];
 
-function categoryLabel(value) {
-  const match = CATEGORIES.find((c) => c.value === value);
-  return match ? match.label : value;
+async function loadCategories() {
+  const { data, error } = await supabaseClient
+    .from("categories")
+    .select("*")
+    .order("label", { ascending: true });
+  if (!error) ALL_CATEGORIES = data;
+  return ALL_CATEGORIES;
+}
+
+function categoryLabel(slug) {
+  const match = ALL_CATEGORIES.find((c) => c.slug === slug);
+  return match ? match.label : slug;
+}
+
+function slugify(label) {
+  return label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
 }
