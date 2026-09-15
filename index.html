@@ -4,26 +4,99 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Vintage Play Collectibles</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: system-ui, sans-serif;
-      background: #111;
-      color: #eee;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      text-align: center;
-    }
-    h1 { font-size: 1.5rem; font-weight: 600; }
-    p { color: #999; }
-  </style>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div>
+  <header>
     <h1>Vintage Play Collectibles</h1>
-    <p>Catalog coming soon.</p>
-  </div>
+    <p>Video games &middot; movies &middot; music &middot; toys &middot; comics &middot; sports cards</p>
+  </header>
+
+  <main>
+    <div class="filters" id="filters"></div>
+    <div class="grid" id="grid"></div>
+    <p class="empty-note" id="emptyNote" hidden>No items found in this category right now.</p>
+  </main>
+
+  <footer>
+    <p>Interested in an item? Message me on Kijiji, Facebook Marketplace, or eBay to arrange purchase and pickup.</p>
+    <p><a href="admin.html">Admin</a></p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="config.js"></script>
+  <script>
+    let allItems = [];
+    let activeCategory = "all";
+
+    function renderFilters() {
+      const filtersEl = document.getElementById("filters");
+      const options = [{ value: "all", label: "All" }, ...CATEGORIES];
+      filtersEl.innerHTML = "";
+      options.forEach((opt) => {
+        const btn = document.createElement("button");
+        btn.textContent = opt.label;
+        btn.className = opt.value === activeCategory ? "active" : "";
+        btn.addEventListener("click", () => {
+          activeCategory = opt.value;
+          renderFilters();
+          renderGrid();
+        });
+        filtersEl.appendChild(btn);
+      });
+    }
+
+    function renderGrid() {
+      const gridEl = document.getElementById("grid");
+      const emptyNote = document.getElementById("emptyNote");
+      const items = allItems.filter(
+        (item) => activeCategory === "all" || item.category === activeCategory
+      );
+
+      gridEl.innerHTML = "";
+      emptyNote.hidden = items.length > 0;
+
+      items.forEach((item) => {
+        const card = document.createElement("div");
+        card.className = "card";
+
+        const photo = item.photo_urls && item.photo_urls[0];
+        card.innerHTML = `
+          ${photo ? `<img src="${photo}" alt="${escapeHtml(item.title)}" />` : `<div class="no-photo">No photo</div>`}
+          <div class="card-body">
+            <span class="tag">${categoryLabel(item.category)}</span>
+            <h3>${escapeHtml(item.title)}</h3>
+            <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
+            <span class="status ${item.status}">${item.status === "available" ? "" : item.status.toUpperCase()}</span>
+          </div>
+        `;
+        gridEl.appendChild(card);
+      });
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement("div");
+      div.textContent = str || "";
+      return div.innerHTML;
+    }
+
+    async function loadItems() {
+      const { data, error } = await supabaseClient
+        .from("items")
+        .select("*")
+        .neq("status", "sold")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        document.getElementById("grid").innerHTML = `<p class="empty-note">Couldn't load items: ${error.message}</p>`;
+        return;
+      }
+      allItems = data;
+      renderGrid();
+    }
+
+    renderFilters();
+    loadItems();
+  </script>
 </body>
 </html>
