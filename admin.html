@@ -35,11 +35,13 @@
 
     <div class="section">
       <h2>Categories</h2>
-      <div class="btn-row">
-        <input type="text" id="newCategoryLabel" placeholder="e.g. Books" style="max-width:250px;" />
-        <button class="btn secondary" id="addCategoryBtn" style="margin-top:0;">Add Category</button>
-      </div>
+      <label for="newCategoryLabel">Category Name</label>
+      <input type="text" id="newCategoryLabel" placeholder="e.g. Books" />
+      <label for="newCategoryPhoto">Cover Photo (optional, shown on the homepage tile)</label>
+      <input type="file" id="newCategoryPhoto" accept="image/*" />
+      <button class="btn secondary" id="addCategoryBtn">Add Category</button>
       <p class="error-text" id="categoryError" hidden></p>
+      <div class="btn-row" id="categoryManager" style="margin-top:0.75rem;"></div>
     </div>
 
     <div class="section">
@@ -253,8 +255,45 @@
 
     document.getElementById("category").addEventListener("change", populateBrandSelect);
 
+    function renderCategoryManager() {
+      const managerEl = document.getElementById("categoryManager");
+      managerEl.innerHTML = "";
+      ALL_CATEGORIES.forEach((cat) => {
+        const wrap = document.createElement("div");
+        wrap.style.textAlign = "center";
+        wrap.innerHTML = `
+          ${cat.cover_photo_url ? `<img src="${cat.cover_photo_url}" alt="" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:2px solid var(--ink);display:block;margin:0 auto;" />` : `<div style="width:60px;height:60px;border-radius:6px;border:2px solid var(--ink);"></div>`}
+          <div style="font-size:0.75rem;margin-top:0.25rem;">${escapeHtml(cat.label)}</div>
+          <button type="button" class="btn secondary" data-edit-cat-photo="${cat.slug}" style="margin-top:0.25rem;padding:0.2rem 0.5rem;font-size:0.7rem;">${cat.cover_photo_url ? "Change Photo" : "Add Photo"}</button>
+          <input type="file" accept="image/*" data-cat-photo-input="${cat.slug}" hidden />
+        `;
+        managerEl.appendChild(wrap);
+      });
+      managerEl.querySelectorAll("[data-edit-cat-photo]").forEach((btn) => {
+        const slug = btn.dataset.editCatPhoto;
+        const fileInput = managerEl.querySelector(`[data-cat-photo-input="${slug}"]`);
+        btn.addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", async () => {
+          if (fileInput.files.length === 0) return;
+          const errorEl = document.getElementById("categoryError");
+          errorEl.hidden = true;
+          try {
+            const [url] = await uploadPhotos(fileInput.files);
+            const { error } = await supabaseClient.from("categories").update({ cover_photo_url: url }).eq("slug", slug);
+            if (error) throw error;
+            await loadCategories();
+            renderCategoryManager();
+          } catch (err) {
+            errorEl.textContent = err.message;
+            errorEl.hidden = false;
+          }
+        });
+      });
+    }
+
     document.getElementById("addCategoryBtn").addEventListener("click", async () => {
       const input = document.getElementById("newCategoryLabel");
+      const photoInput = document.getElementById("newCategoryPhoto");
       const errorEl = document.getElementById("categoryError");
       errorEl.hidden = true;
 
@@ -262,18 +301,27 @@
       if (!label) return;
       const slug = slugify(label);
 
-      const { error } = await supabaseClient.from("categories").insert({ slug, label });
-      if (error) {
-        errorEl.textContent = error.message;
+      try {
+        let cover_photo_url = null;
+        if (photoInput.files.length > 0) {
+          const urls = await uploadPhotos(photoInput.files);
+          cover_photo_url = urls[0];
+        }
+        const { error } = await supabaseClient.from("categories").insert({ slug, label, cover_photo_url });
+        if (error) throw error;
+      } catch (err) {
+        errorEl.textContent = err.message;
         errorEl.hidden = false;
         return;
       }
       input.value = "";
+      photoInput.value = "";
       await loadCategories();
       populateCategorySelect();
       populateInventoryCategoryFilter();
       populateBrandCategorySelect();
       populateBrandSelect();
+      renderCategoryManager();
     });
 
     document.getElementById("inventorySearch").addEventListener("input", renderItemList);
@@ -284,6 +332,7 @@
       populateCategorySelect();
       populateInventoryCategoryFilter();
       populateBrandCategorySelect();
+      renderCategoryManager();
       await loadBrands();
       renderBrandManager();
       populateBrandSelect();
@@ -389,15 +438,21 @@
         const row = document.createElement("div");
         row.className = "item-row";
         const photo = item.photo_urls && item.photo_urls[0];
+        const badges = [
+          item.featured_at ? `<span class="badge badge-new">NEW</span>` : "",
+          item.promo_at ? `<span class="badge badge-sale">SALE</span>` : "",
+        ].join(" ");
         row.innerHTML = `
           ${photo ? `<img src="${photo}" alt="" />` : `<div class="no-photo" style="width:70px;height:70px;">No photo</div>`}
           <div class="info">
-            <h4>${escapeHtml(item.title)} <span class="meta">(${categoryLabel(item.category)})</span></h4>
+            <h4>${escapeHtml(item.title)} <span class="meta">(${categoryLabel(item.category)})</span> ${badges}</h4>
             <div class="meta">$${Number(item.asking_price).toFixed(2)} &middot; Qty ${item.quantity} &middot; ${item.status}</div>
             <div class="btn-row">
               <button class="btn secondary" data-action="edit" data-id="${item.id}">Edit</button>
               <button class="btn danger" data-action="delete" data-id="${item.id}">Delete</button>
               <button class="btn secondary" data-action="listing" data-id="${item.id}">Generate Listing Text</button>
+              <button class="btn secondary" data-action="toggle-featured" data-id="${item.id}">${item.featured_at ? "Unfeature" : "Feature as New"}</button>
+              <button class="btn secondary" data-action="toggle-promo" data-id="${item.id}">${item.promo_at ? "Remove from Sale" : "Mark on Sale"}</button>
             </div>
             <div class="listing-output" data-listing-for="${item.id}" hidden></div>
           </div>
@@ -414,6 +469,24 @@
       listEl.querySelectorAll('[data-action="listing"]').forEach((btn) =>
         btn.addEventListener("click", () => toggleListing(btn.dataset.id))
       );
+      listEl.querySelectorAll('[data-action="toggle-featured"]').forEach((btn) =>
+        btn.addEventListener("click", () => toggleFlag(btn.dataset.id, "featured_at"))
+      );
+      listEl.querySelectorAll('[data-action="toggle-promo"]').forEach((btn) =>
+        btn.addEventListener("click", () => toggleFlag(btn.dataset.id, "promo_at"))
+      );
+    }
+
+    async function toggleFlag(id, column) {
+      const item = items.find((i) => i.id === id);
+      if (!item) return;
+      const newValue = item[column] ? null : new Date().toISOString();
+      const { error } = await supabaseClient.from("items").update({ [column]: newValue }).eq("id", id);
+      if (error) {
+        alert(`Couldn't update: ${error.message}`);
+        return;
+      }
+      await loadItems();
     }
 
     function escapeHtml(str) {

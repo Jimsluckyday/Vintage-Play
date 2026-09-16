@@ -27,6 +27,10 @@
       <input type="text" id="itemSearch" placeholder="Search titles..." />
       <div class="letter-bar" id="letterBar"></div>
     </div>
+    <div id="newArrivalsSection" hidden>
+      <h2 style="font-family:'Bangers',cursive;font-weight:400;letter-spacing:0.02em;font-size:1.4rem;border-bottom:3px solid var(--ink);padding-bottom:0.4rem;">New Arrivals</h2>
+      <div class="grid" id="newArrivalsGrid" style="margin-bottom:2rem;"></div>
+    </div>
     <div class="grid" id="categoryGrid" hidden></div>
     <button class="btn secondary" id="backToBrandsBtn" hidden style="margin:0 0 1rem;">&larr; Back to publishers</button>
     <div class="grid" id="brandGrid" hidden></div>
@@ -115,19 +119,21 @@
       listEl.hidden = !showingFlatList;
       backBtn.hidden = !(activeCategory !== "all" && categoryBrands.length > 0 && (activeBrand || searching));
       emptyNote.hidden = true;
+      document.getElementById("newArrivalsSection").hidden = true;
 
       if (showingCategoryTiles) {
+        renderNewArrivals();
         categoryGridEl.innerHTML = "";
         renderLetterBar(allItems);
-        sortByTitle(ALL_CATEGORIES.map((c) => ({ title: c.label, slug: c.slug }))).forEach((cat) => {
+        [...ALL_CATEGORIES].sort((a, b) => a.label.localeCompare(b.label)).forEach((cat) => {
           const count = allItems.filter((item) => item.category === cat.slug).length;
           const card = document.createElement("div");
           card.className = "card";
           card.style.cursor = "pointer";
           card.innerHTML = `
-            <div class="no-photo">${escapeHtml(cat.title)}</div>
+            ${cat.cover_photo_url ? `<img src="${cat.cover_photo_url}" alt="${escapeHtml(cat.label)}" />` : `<div class="no-photo">${escapeHtml(cat.label)}</div>`}
             <div class="card-body">
-              <h3>${escapeHtml(cat.title)}</h3>
+              <h3>${escapeHtml(cat.label)}</h3>
               <span class="price">${count} item${count === 1 ? "" : "s"}</span>
             </div>
           `;
@@ -218,29 +224,59 @@
       withPhotos.forEach((item) => {
         const card = document.createElement("div");
         card.className = "card";
-        const photo = item.photo_urls[0];
-        card.innerHTML = `
-          <img src="${photo}" alt="${escapeHtml(item.title)}" />
-          <div class="card-body">
-            <span class="tag">${categoryLabel(item.category)}</span>
-            <h3>${escapeHtml(item.title)}</h3>
-            <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
-            <span class="status ${item.status}">${item.status === "available" ? "" : item.status.toUpperCase()}</span>
-          </div>
-        `;
+        card.innerHTML = buildCardInnerHtml(item);
         gridEl.appendChild(card);
       });
 
       withoutPhotos.forEach((item) => {
         const row = document.createElement("div");
         row.className = "list-row";
-        row.innerHTML = `
+        row.innerHTML = buildListRowInnerHtml(item);
+        listEl.appendChild(row);
+      });
+    }
+
+    function buildCardInnerHtml(item) {
+      const photo = item.photo_urls && item.photo_urls[0];
+      return `
+        ${photo ? `<img src="${photo}" alt="${escapeHtml(item.title)}" />` : `<div class="no-photo">No photo</div>`}
+        <div class="card-body">
           <span class="tag">${categoryLabel(item.category)}</span>
-          <span class="list-row-title">${escapeHtml(item.title)}</span>
+          ${item.promo_at ? `<span class="badge badge-sale" style="align-self:flex-start;">SALE</span>` : ""}
+          <h3>${escapeHtml(item.title)}</h3>
           <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
           <span class="status ${item.status}">${item.status === "available" ? "" : item.status.toUpperCase()}</span>
-        `;
-        listEl.appendChild(row);
+        </div>
+      `;
+    }
+
+    function buildListRowInnerHtml(item) {
+      return `
+        <span class="tag">${categoryLabel(item.category)}</span>
+        ${item.promo_at ? `<span class="badge badge-sale">SALE</span>` : ""}
+        <span class="list-row-title">${escapeHtml(item.title)}</span>
+        <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
+        <span class="status ${item.status}">${item.status === "available" ? "" : item.status.toUpperCase()}</span>
+      `;
+    }
+
+    function renderNewArrivals() {
+      const sectionEl = document.getElementById("newArrivalsSection");
+      const gridEl = document.getElementById("newArrivalsGrid");
+      const featured = allItems
+        .filter((item) => item.featured_at)
+        .sort((a, b) => new Date(b.featured_at) - new Date(a.featured_at))
+        .slice(0, 5);
+
+      sectionEl.hidden = featured.length === 0;
+      if (featured.length === 0) return;
+
+      gridEl.innerHTML = "";
+      featured.forEach((item) => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = buildCardInnerHtml(item);
+        gridEl.appendChild(card);
       });
     }
 
@@ -297,11 +333,13 @@
       renderGrid();
     });
 
-    document.getElementById("grid").addEventListener("click", (e) => {
+    function handleLightboxDelegate(e) {
       if (e.target.tagName === "IMG") {
         openLightbox(e.target.src, e.target.alt);
       }
-    });
+    }
+    document.getElementById("grid").addEventListener("click", handleLightboxDelegate);
+    document.getElementById("newArrivalsGrid").addEventListener("click", handleLightboxDelegate);
     document.getElementById("lightbox").addEventListener("click", closeLightbox);
     document.getElementById("lightboxClose").addEventListener("click", closeLightbox);
     document.addEventListener("keydown", (e) => {
