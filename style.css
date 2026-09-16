@@ -152,7 +152,7 @@ main {
 .card-body .status.pending { color: #a9740f; }
 .card-body .status.sold { color: var(--brick); }
 
-.card img { cursor: zoom-in; }
+#grid .card img { cursor: zoom-in; }
 
 .list-rows {
   margin-top: 1.5rem;
@@ -216,7 +216,9 @@ main {
   cursor: zoom-out;
 }
 
-.lightbox[hidden] {
+.lightbox[hidden],
+.grid[hidden],
+.list-rows[hidden] {
   display: none !important;
 }
 

@@ -23,6 +23,8 @@
 
   <main>
     <div class="filters" id="filters"></div>
+    <button class="btn secondary" id="backToBrandsBtn" hidden style="margin:0 0 1rem;">&larr; Back to publishers</button>
+    <div class="grid" id="brandGrid" hidden></div>
     <div class="grid" id="grid"></div>
     <div class="list-rows" id="listRows"></div>
     <p class="empty-note" id="emptyNote" hidden>No items found in this category right now.</p>
@@ -44,6 +46,7 @@
   <script>
     let allItems = [];
     let activeCategory = "all";
+    let activeBrand = null;
 
     function renderFilters() {
       const filtersEl = document.getElementById("filters");
@@ -58,6 +61,7 @@
         btn.className = opt.slug === activeCategory ? "active" : "";
         btn.addEventListener("click", () => {
           activeCategory = opt.slug;
+          activeBrand = null;
           renderFilters();
           renderGrid();
         });
@@ -65,13 +69,78 @@
       });
     }
 
+    function currentCategoryBrands() {
+      if (activeCategory === "all") return [];
+      return brandsForCategory(activeCategory);
+    }
+
     function renderGrid() {
       const gridEl = document.getElementById("grid");
       const listEl = document.getElementById("listRows");
+      const brandGridEl = document.getElementById("brandGrid");
+      const backBtn = document.getElementById("backToBrandsBtn");
       const emptyNote = document.getElementById("emptyNote");
-      const items = allItems.filter(
-        (item) => activeCategory === "all" || item.category === activeCategory
-      );
+
+      const categoryBrands = currentCategoryBrands();
+      const showingBrandTiles = categoryBrands.length > 0 && !activeBrand;
+
+      backBtn.hidden = !(categoryBrands.length > 0 && activeBrand);
+      brandGridEl.hidden = !showingBrandTiles;
+      gridEl.hidden = showingBrandTiles;
+      listEl.hidden = showingBrandTiles;
+      emptyNote.hidden = true;
+
+      if (showingBrandTiles) {
+        brandGridEl.innerHTML = "";
+        categoryBrands.forEach((brand) => {
+          const count = allItems.filter(
+            (item) => item.category === activeCategory && item.brand === brand.slug
+          ).length;
+          const card = document.createElement("div");
+          card.className = "card";
+          card.style.cursor = "pointer";
+          card.innerHTML = `
+            ${brand.cover_photo_url ? `<img src="${brand.cover_photo_url}" alt="${escapeHtml(brand.label)}" />` : `<div class="no-photo">No photo</div>`}
+            <div class="card-body">
+              <h3>${escapeHtml(brand.label)}</h3>
+              <span class="price">${count} item${count === 1 ? "" : "s"}</span>
+            </div>
+          `;
+          card.addEventListener("click", () => {
+            activeBrand = brand.slug;
+            renderGrid();
+          });
+          brandGridEl.appendChild(card);
+        });
+        const uncategorizedCount = allItems.filter(
+          (item) => item.category === activeCategory && !item.brand
+        ).length;
+        if (uncategorizedCount > 0) {
+          const card = document.createElement("div");
+          card.className = "card";
+          card.style.cursor = "pointer";
+          card.innerHTML = `
+            <div class="no-photo">No photo</div>
+            <div class="card-body">
+              <h3>Other / Uncategorized</h3>
+              <span class="price">${uncategorizedCount} item${uncategorizedCount === 1 ? "" : "s"}</span>
+            </div>
+          `;
+          card.addEventListener("click", () => {
+            activeBrand = "__none__";
+            renderGrid();
+          });
+          brandGridEl.appendChild(card);
+        }
+        return;
+      }
+
+      const items = allItems.filter((item) => {
+        if (activeCategory !== "all" && item.category !== activeCategory) return false;
+        if (activeBrand === "__none__") return !item.brand;
+        if (activeBrand) return item.brand === activeBrand;
+        return true;
+      });
 
       const withPhotos = items.filter((item) => item.photo_urls && item.photo_urls[0]);
       const withoutPhotos = items.filter((item) => !(item.photo_urls && item.photo_urls[0]));
@@ -121,6 +190,11 @@
       document.getElementById("lightbox").hidden = true;
     }
 
+    document.getElementById("backToBrandsBtn").addEventListener("click", () => {
+      activeBrand = null;
+      renderGrid();
+    });
+
     document.getElementById("grid").addEventListener("click", (e) => {
       if (e.target.tagName === "IMG") {
         openLightbox(e.target.src, e.target.alt);
@@ -160,6 +234,7 @@
 
     async function init() {
       await loadCategories();
+      await loadBrands();
       renderFilters();
       loadItems();
       startVersionWatch();

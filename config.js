@@ -1,6 +1,6 @@
 // Bump this by 1 every time this file (or admin.html/index.html) is redeployed.
 // Lets the page detect and warn if the browser is running a stale cached copy.
-const LOCAL_VERSION = "7";
+const LOCAL_VERSION = "8";
 
 // Supabase project connection details.
 // The anon key is safe to expose in client-side code — Row Level Security
@@ -54,6 +54,24 @@ async function loadCategories() {
 function categoryLabel(slug) {
   const match = ALL_CATEGORIES.find((c) => c.slug === slug);
   return match ? match.label : slug;
+}
+
+// Populated by loadBrands() before the page renders. A "brand" is a
+// sub-grouping within a category (e.g. DC / Marvel / Image within Comics)
+// used to show cover-image tiles instead of a flat list when there are many items.
+let ALL_BRANDS = [];
+
+async function loadBrands() {
+  const { data, error } = await supabaseClient
+    .from("brands")
+    .select("*")
+    .order("label", { ascending: true });
+  if (!error) ALL_BRANDS = data;
+  return ALL_BRANDS;
+}
+
+function brandsForCategory(categorySlug) {
+  return ALL_BRANDS.filter((b) => b.category === categorySlug);
 }
 
 function slugify(label) {
