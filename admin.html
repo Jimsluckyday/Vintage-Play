@@ -176,7 +176,11 @@
           ${brand.cover_photo_url ? `<img src="${brand.cover_photo_url}" alt="" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:2px solid var(--ink);display:block;margin:0 auto;" />` : `<div style="width:60px;height:60px;border-radius:6px;border:2px solid var(--ink);"></div>`}
           <div style="font-size:0.75rem;margin-top:0.25rem;">${escapeHtml(brand.label)}</div>
           <div style="font-size:0.65rem;color:var(--ink-soft);">${categoryLabel(brand.category)}</div>
-          <button type="button" class="btn danger" data-remove-brand="${brand.slug}" style="margin-top:0.25rem;padding:0.2rem 0.5rem;font-size:0.7rem;">Delete</button>
+          <div class="btn-row" style="justify-content:center;margin-top:0.25rem;">
+            <button type="button" class="btn secondary" data-edit-photo="${brand.slug}" style="margin-top:0;padding:0.2rem 0.5rem;font-size:0.7rem;">${brand.cover_photo_url ? "Change Photo" : "Add Photo"}</button>
+            <button type="button" class="btn danger" data-remove-brand="${brand.slug}" style="margin-top:0;padding:0.2rem 0.5rem;font-size:0.7rem;">Delete</button>
+          </div>
+          <input type="file" accept="image/*" data-photo-input="${brand.slug}" hidden />
         `;
         managerEl.appendChild(wrap);
       });
@@ -189,6 +193,26 @@
           populateBrandSelect();
         })
       );
+      managerEl.querySelectorAll("[data-edit-photo]").forEach((btn) => {
+        const slug = btn.dataset.editPhoto;
+        const fileInput = managerEl.querySelector(`[data-photo-input="${slug}"]`);
+        btn.addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", async () => {
+          if (fileInput.files.length === 0) return;
+          const errorEl = document.getElementById("brandError");
+          errorEl.hidden = true;
+          try {
+            const [url] = await uploadPhotos(fileInput.files);
+            const { error } = await supabaseClient.from("brands").update({ cover_photo_url: url }).eq("slug", slug);
+            if (error) throw error;
+            await loadBrands();
+            renderBrandManager();
+          } catch (err) {
+            errorEl.textContent = err.message;
+            errorEl.hidden = false;
+          }
+        });
+      });
     }
 
     document.getElementById("addBrandBtn").addEventListener("click", async () => {
