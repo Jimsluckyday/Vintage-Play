@@ -34,6 +34,7 @@
 
   <footer>
     <p>Interested in an item? Message me on Kijiji, Facebook Marketplace, or eBay to arrange purchase and pickup.</p>
+    <p>Buying more than one item? I'm always happy to work out a bundle deal — just ask!</p>
     <p><a href="admin.html">Admin</a></p>
   </footer>
 
@@ -140,11 +141,13 @@
     }
 
     async function loadItems() {
+      // Supabase caps a query at 1000 rows by default; .range() overrides that.
       const { data, error } = await supabaseClient
         .from("items")
         .select("*")
         .neq("status", "sold")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(0, 9999);
 
       if (error) {
         document.getElementById("grid").innerHTML = `<p class="empty-note">Couldn't load items: ${error.message}</p>`;

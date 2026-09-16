@@ -88,12 +88,27 @@
     </div>
 
     <div class="section">
+      <h2>Bulk Import (CSV)</h2>
+      <p class="hint">Upload a CSV with these columns: <code>title, category, condition_notes, description, cost_basis, asking_price, quantity, status</code>. The <code>category</code> value must match an existing category slug (e.g. <code>comics</code>) — add the category first above if it doesn't exist yet. Items import with no photo and show up in the compact list view on the catalog page until you add photos individually.</p>
+      <input type="file" id="bulkImportFile" accept=".csv" />
+      <button class="btn secondary" id="bulkImportBtn" style="margin-top:0.5rem;">Import CSV</button>
+      <p class="hint" id="bulkImportStatus"></p>
+      <p class="error-text" id="bulkImportError" hidden></p>
+    </div>
+
+    <div class="section">
       <h2>Inventory (<span id="itemCount">0</span>)</h2>
+      <div class="btn-row">
+        <input type="text" id="inventorySearch" placeholder="Search by title..." style="max-width:300px;" />
+        <select id="inventoryCategoryFilter" style="max-width:220px;"></select>
+      </div>
+      <p class="hint" id="inventoryFilterNote"></p>
       <div id="itemList"></div>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="/config.js"></script>
   <script>
     let items = [];
@@ -130,11 +145,16 @@
       input.value = "";
       await loadCategories();
       populateCategorySelect();
+      populateInventoryCategoryFilter();
     });
+
+    document.getElementById("inventorySearch").addEventListener("input", renderItemList);
+    document.getElementById("inventoryCategoryFilter").addEventListener("change", renderItemList);
 
     async function checkSession() {
       await loadCategories();
       populateCategorySelect();
+      populateInventoryCategoryFilter();
       const { data } = await supabaseClient.auth.getSession();
       if (data.session) {
         showAdmin();
@@ -175,10 +195,12 @@
     });
 
     async function loadItems() {
+      // Supabase caps a query at 1000 rows by default; .range() overrides that.
       const { data, error } = await supabaseClient
         .from("items")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(0, 9999);
 
       if (error) {
         document.getElementById("itemList").innerHTML = `<p class="error-text">Couldn't load items: ${error.message}</p>`;
@@ -188,12 +210,41 @@
       renderItemList();
     }
 
+    const INVENTORY_PAGE_SIZE = 100;
+
+    function populateInventoryCategoryFilter() {
+      const select = document.getElementById("inventoryCategoryFilter");
+      const previousValue = select.value;
+      select.innerHTML =
+        `<option value="all">All Categories</option>` +
+        ALL_CATEGORIES.map((c) => `<option value="${c.slug}">${c.label}</option>`).join("");
+      if (previousValue) select.value = previousValue;
+    }
+
     function renderItemList() {
       document.getElementById("itemCount").textContent = items.length;
+
+      const searchTerm = document.getElementById("inventorySearch").value.trim().toLowerCase();
+      const categoryFilter = document.getElementById("inventoryCategoryFilter").value;
+
+      const filtered = items.filter((item) => {
+        const matchesSearch = !searchTerm || item.title.toLowerCase().includes(searchTerm);
+        const matchesCategory = categoryFilter === "all" || item.category === categoryFilter;
+        return matchesSearch && matchesCategory;
+      });
+
+      const shown = filtered.slice(0, INVENTORY_PAGE_SIZE);
+
       const listEl = document.getElementById("itemList");
       listEl.innerHTML = "";
 
-      items.forEach((item) => {
+      const countNote = document.getElementById("inventoryFilterNote");
+      countNote.textContent =
+        filtered.length > shown.length
+          ? `Showing first ${shown.length} of ${filtered.length} matching items — narrow your search to see more.`
+          : `Showing ${filtered.length} of ${items.length} total items.`;
+
+      shown.forEach((item) => {
         const row = document.createElement("div");
         row.className = "item-row";
         const photo = item.photo_urls && item.photo_urls[0];
@@ -356,6 +407,76 @@
       }
     });
 
+    document.getElementById("bulkImportBtn").addEventListener("click", () => {
+      const fileInput = document.getElementById("bulkImportFile");
+      const statusEl = document.getElementById("bulkImportStatus");
+      const errorEl = document.getElementById("bulkImportError");
+      errorEl.hidden = true;
+      statusEl.textContent = "";
+
+      const file = fileInput.files[0];
+      if (!file) {
+        errorEl.textContent = "Choose a CSV file first.";
+        errorEl.hidden = false;
+        return;
+      }
+
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async (results) => {
+          const validSlugs = new Set(ALL_CATEGORIES.map((c) => c.slug));
+          const toInsert = [];
+          let skipped = 0;
+
+          results.data.forEach((row) => {
+            const title = (row.title || "").trim();
+            const category = (row.category || "").trim();
+            if (!title || !validSlugs.has(category)) {
+              skipped++;
+              return;
+            }
+            toInsert.push({
+              title,
+              category,
+              condition_notes: (row.condition_notes || "").trim(),
+              description: (row.description || "").trim(),
+              cost_basis: row.cost_basis ? parseFloat(row.cost_basis) : null,
+              asking_price: row.asking_price ? parseFloat(row.asking_price) : null,
+              quantity: row.quantity ? parseInt(row.quantity, 10) : 1,
+              status: row.status && row.status.trim() ? row.status.trim() : "available",
+              photo_urls: [],
+            });
+          });
+
+          if (toInsert.length === 0) {
+            errorEl.textContent = "No valid rows found — check that titles are filled in and categories match an existing slug.";
+            errorEl.hidden = false;
+            return;
+          }
+
+          const chunkSize = 200;
+          let imported = 0;
+          for (let i = 0; i < toInsert.length; i += chunkSize) {
+            const chunk = toInsert.slice(i, i + chunkSize);
+            const { error } = await supabaseClient.from("items").insert(chunk);
+            if (error) {
+              errorEl.textContent = `Stopped after ${imported} rows imported: ${error.message}`;
+              errorEl.hidden = false;
+              await loadItems();
+              return;
+            }
+            imported += chunk.length;
+            statusEl.textContent = `Imported ${imported} / ${toInsert.length}...`;
+          }
+
+          statusEl.textContent = `Done — imported ${imported} items.` + (skipped ? ` Skipped ${skipped} row(s) with a missing title or unrecognized category.` : "");
+          fileInput.value = "";
+          await loadItems();
+        },
+      });
+    });
+
     async function deleteItem(id) {
       if (!confirm("Delete this item? This can't be undone.")) return;
       const { error } = await supabaseClient.from("items").delete().eq("id", id);
@@ -378,6 +499,7 @@
         item.quantity > 1 ? `Quantity available: ${item.quantity}` : "",
         "",
         "Cash on pickup. Message me with any questions!",
+        "Buying multiple items? Happy to work out a bundle deal.",
       ];
       return lines.filter((l) => l !== "").join("\n");
     }
