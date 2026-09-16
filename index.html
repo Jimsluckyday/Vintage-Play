@@ -16,6 +16,27 @@
   </div>
   <div class="version-tag">v<span id="versionLabel"></span></div>
 
+  <button class="cart-toggle" id="cartToggleBtn">Cart (<span id="cartCount">0</span>)</button>
+
+  <div class="cart-modal" id="cartModal" hidden>
+    <div class="cart-panel">
+      <div class="cart-panel-header">
+        <h2>Your Cart</h2>
+        <span class="lightbox-close" id="cartCloseBtn" style="position:static;color:var(--ink);">&times;</span>
+      </div>
+      <div id="cartItems"></div>
+      <p class="empty-note" id="cartEmptyNote" hidden>Your cart is empty.</p>
+      <div class="cart-total">Total: $<span id="cartTotal">0.00</span></div>
+      <p class="hint">This isn't an automatic checkout — sending a request lets me know what you're after so we can arrange payment (PayPal, e-transfer, crypto) and pickup/shipping together.</p>
+      <div class="btn-row">
+        <button class="btn" id="cartCopyBtn">Copy Order Summary</button>
+        <button class="btn secondary" id="cartPayBtn">Pay with PayPal</button>
+      </div>
+      <button class="btn danger" id="cartClearBtn" style="margin-top:0.5rem;">Clear Cart</button>
+      <p class="hint" id="cartCopyStatus"></p>
+    </div>
+  </div>
+
   <header>
     <h1>Vintage Play Collectibles</h1>
     <p>Video games &middot; movies &middot; music &middot; toys &middot; comics &middot; sports cards</p>
@@ -246,6 +267,7 @@
           <h3>${escapeHtml(item.title)}</h3>
           <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
           <span class="status ${item.status}">${item.status === "available" ? "" : item.status.toUpperCase()}</span>
+          <button type="button" class="btn secondary" data-add-cart="${item.id}" style="margin-top:0.4rem;padding:0.35rem 0.7rem;font-size:0.8rem;">Add to Cart</button>
         </div>
       `;
     }
@@ -257,6 +279,7 @@
         <span class="list-row-title">${escapeHtml(item.title)}</span>
         <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
         <span class="status ${item.status}">${item.status === "available" ? "" : item.status.toUpperCase()}</span>
+        <button type="button" class="btn secondary" data-add-cart="${item.id}" style="padding:0.2rem 0.6rem;font-size:0.75rem;margin-top:0;">Add to Cart</button>
       `;
     }
 
@@ -337,9 +360,163 @@
       if (e.target.tagName === "IMG") {
         openLightbox(e.target.src, e.target.alt);
       }
+      if (e.target.dataset.addCart) {
+        addToCart(e.target.dataset.addCart);
+      }
     }
     document.getElementById("grid").addEventListener("click", handleLightboxDelegate);
     document.getElementById("newArrivalsGrid").addEventListener("click", handleLightboxDelegate);
+    document.getElementById("listRows").addEventListener("click", handleLightboxDelegate);
+
+    // --- Cart (client-side "order request" cart — no live payment processing) ---
+    const CART_STORAGE_KEY = "vpc_cart";
+
+    function getCart() {
+      try {
+        return JSON.parse(localStorage.getItem(CART_STORAGE_KEY)) || [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveCart(cart) {
+      try {
+        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+      } catch (e) {
+        // localStorage unavailable (private browsing etc.) — cart just won't persist
+      }
+      renderCartBadge();
+    }
+
+    function addToCart(itemId) {
+      const item = allItems.find((i) => i.id === itemId);
+      if (!item) return;
+      const cart = getCart();
+      const existing = cart.find((c) => c.id === itemId);
+      const maxQty = item.quantity || 1;
+      if (existing) {
+        existing.qty = Math.min(existing.qty + 1, maxQty);
+      } else {
+        cart.push({ id: itemId, qty: 1 });
+      }
+      saveCart(cart);
+    }
+
+    function removeFromCart(itemId) {
+      saveCart(getCart().filter((c) => c.id !== itemId));
+      renderCartPanel();
+    }
+
+    function setCartQty(itemId, qty) {
+      const item = allItems.find((i) => i.id === itemId);
+      const maxQty = item ? item.quantity || 1 : 99;
+      const cart = getCart();
+      const entry = cart.find((c) => c.id === itemId);
+      if (!entry) return;
+      entry.qty = Math.max(1, Math.min(qty, maxQty));
+      saveCart(cart);
+      renderCartPanel();
+    }
+
+    function renderCartBadge() {
+      const count = getCart().reduce((sum, c) => sum + c.qty, 0);
+      document.getElementById("cartCount").textContent = count;
+    }
+
+    function cartLines() {
+      return getCart()
+        .map((c) => {
+          const item = allItems.find((i) => i.id === c.id);
+          return item ? { item, qty: c.qty } : null;
+        })
+        .filter(Boolean);
+    }
+
+    function renderCartPanel() {
+      const lines = cartLines();
+      const itemsEl = document.getElementById("cartItems");
+      const emptyNote = document.getElementById("cartEmptyNote");
+      itemsEl.innerHTML = "";
+      emptyNote.hidden = lines.length > 0;
+
+      let total = 0;
+      lines.forEach(({ item, qty }) => {
+        total += Number(item.asking_price) * qty;
+        const row = document.createElement("div");
+        row.className = "cart-line";
+        row.innerHTML = `
+          <span class="cart-line-title">${escapeHtml(item.title)}</span>
+          <input type="number" min="1" max="${item.quantity || 1}" value="${qty}" data-cart-qty="${item.id}" style="width:60px;" />
+          <span class="cart-line-price">$${(Number(item.asking_price) * qty).toFixed(2)}</span>
+          <button type="button" class="btn danger" data-cart-remove="${item.id}" style="margin-top:0;padding:0.2rem 0.5rem;font-size:0.75rem;">Remove</button>
+        `;
+        itemsEl.appendChild(row);
+      });
+
+      document.getElementById("cartTotal").textContent = total.toFixed(2);
+      document.getElementById("cartCopyStatus").textContent = "";
+
+      itemsEl.querySelectorAll("[data-cart-remove]").forEach((btn) =>
+        btn.addEventListener("click", () => removeFromCart(btn.dataset.cartRemove))
+      );
+      itemsEl.querySelectorAll("[data-cart-qty]").forEach((input) =>
+        input.addEventListener("change", () => setCartQty(input.dataset.cartQty, parseInt(input.value, 10) || 1))
+      );
+    }
+
+    function buildOrderSummaryText() {
+      const lines = cartLines();
+      const total = lines.reduce((sum, { item, qty }) => sum + Number(item.asking_price) * qty, 0);
+      const body = [
+        "Order Request - Vintage Play Collectibles",
+        "",
+        ...lines.map(({ item, qty }) => `${qty}x ${item.title} - $${Number(item.asking_price).toFixed(2)} each = $${(Number(item.asking_price) * qty).toFixed(2)}`),
+        "",
+        `Total: $${total.toFixed(2)}`,
+        "",
+        "Please let me know how you'd like to arrange payment (PayPal, e-transfer, crypto) and pickup/shipping.",
+      ];
+      return body.join("\n");
+    }
+
+    function openCart() {
+      renderCartPanel();
+      document.getElementById("cartModal").hidden = false;
+    }
+
+    function closeCart() {
+      document.getElementById("cartModal").hidden = true;
+    }
+
+    document.getElementById("cartToggleBtn").addEventListener("click", openCart);
+    document.getElementById("cartCloseBtn").addEventListener("click", closeCart);
+    document.getElementById("cartModal").addEventListener("click", (e) => {
+      if (e.target.id === "cartModal") closeCart();
+    });
+
+    document.getElementById("cartClearBtn").addEventListener("click", () => {
+      if (getCart().length === 0) return;
+      if (!confirm("Clear everything from your cart?")) return;
+      saveCart([]);
+      renderCartPanel();
+    });
+
+    document.getElementById("cartCopyBtn").addEventListener("click", async () => {
+      const statusEl = document.getElementById("cartCopyStatus");
+      if (cartLines().length === 0) return;
+      try {
+        await navigator.clipboard.writeText(buildOrderSummaryText());
+        statusEl.textContent = "Copied! Paste this into a message on Kijiji, Facebook, or eBay.";
+      } catch (e) {
+        statusEl.textContent = "Couldn't copy automatically — select and copy the text yourself.";
+      }
+    });
+
+    document.getElementById("cartPayBtn").addEventListener("click", () => {
+      const total = cartLines().reduce((sum, { item, qty }) => sum + Number(item.asking_price) * qty, 0);
+      if (total <= 0) return;
+      window.open(`https://paypal.me/${PAYPAL_ME_HANDLE}/${total.toFixed(2)}`, "_blank");
+    });
     document.getElementById("lightbox").addEventListener("click", closeLightbox);
     document.getElementById("lightboxClose").addEventListener("click", closeLightbox);
     document.addEventListener("keydown", (e) => {
@@ -387,6 +564,7 @@
       renderFilters();
       loadItems();
       startVersionWatch();
+      renderCartBadge();
     }
 
     init();

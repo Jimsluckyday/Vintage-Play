@@ -1,6 +1,9 @@
 // Bump this by 1 every time this file (or admin.html/index.html) is redeployed.
 // Lets the page detect and warn if the browser is running a stale cached copy.
-const LOCAL_VERSION = "15";
+const LOCAL_VERSION = "16";
+
+// Where the cart's "Pay with PayPal" button sends buyers — paypal.me/<this>
+const PAYPAL_ME_HANDLE = "vintageplay";
 
 // Supabase project connection details.
 // The anon key is safe to expose in client-side code — Row Level Security
