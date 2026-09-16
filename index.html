@@ -579,9 +579,21 @@
 
       let emailOk = true;
       try {
-        await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { message: summaryText });
+        await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+          message: summaryText,
+          to_email: ETRANSFER_EMAIL,
+        });
       } catch (e) {
         emailOk = false;
+      }
+
+      try {
+        await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+          message: `New order request - $${total.toFixed(2)} - check your email or admin panel.`,
+          to_email: SMS_GATEWAY_ADDRESS,
+        });
+      } catch (e) {
+        // text alert is a nice-to-have on top of email — don't fail the order over it
       }
 
       try {
@@ -591,7 +603,9 @@
       }
 
       btn.disabled = false;
-      if (dbError && !emailOk) {
+      if (dbError && emailOk) {
+        statusEl.textContent = "Request sent by email, but couldn't save to the order log — let the seller know just in case.";
+      } else if (dbError && !emailOk) {
         statusEl.textContent = "Something went wrong sending this — please copy the summary above and message the seller directly.";
       } else if (!emailOk) {
         statusEl.textContent = "Request recorded! (Email notification failed, but it's saved.) Summary also copied to your clipboard.";

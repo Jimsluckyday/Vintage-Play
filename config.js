@@ -1,6 +1,9 @@
 // Bump this by 1 every time this file (or admin.html/index.html) is redeployed.
 // Lets the page detect and warn if the browser is running a stale cached copy.
-const LOCAL_VERSION = "18";
+const LOCAL_VERSION = "19";
+
+// Free carrier email-to-SMS gateway — sends a short text alert on new orders.
+const SMS_GATEWAY_ADDRESS = "4167103600@pcs.rogers.com";
 
 // EmailJS lets the static site send a real email on order request with no backend.
 // The public key is designed by EmailJS to be safely exposed in client-side code.
