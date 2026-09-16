@@ -330,6 +330,23 @@ main {
   margin: 0.75rem 0;
 }
 
+.pay-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.4rem 0;
+  font-size: 0.85rem;
+}
+
+.pay-option code {
+  background: var(--line);
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
 .lightbox img {
   max-width: 100%;
   max-height: 100%;

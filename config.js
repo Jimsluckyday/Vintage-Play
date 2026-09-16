@@ -1,9 +1,16 @@
 // Bump this by 1 every time this file (or admin.html/index.html) is redeployed.
 // Lets the page detect and warn if the browser is running a stale cached copy.
-const LOCAL_VERSION = "16";
+const LOCAL_VERSION = "17";
 
 // Where the cart's "Pay with PayPal" button sends buyers — paypal.me/<this>
 const PAYPAL_ME_HANDLE = "vintageplay";
+
+// Additional manual payment options shown in the cart's "How to Pay" section.
+const ETRANSFER_EMAIL = "Jamesherder@yahoo.ca";
+const CRYPTO_OPTIONS = [
+  { label: "BTC (Shakepay)", address: "bc1qjxt4ew7f3cvh0gvaux0h0ajfeyj9zzh8w38rznjw4jz377rl3pqsrucea4" },
+];
+const SHIPPING_NOTE = "Local pickup preferred. Shipping available via Canada Post — cost quoted separately after the item is weighed and packed.";
 
 // Supabase project connection details.
 // The anon key is safe to expose in client-side code — Row Level Security
