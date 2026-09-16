@@ -318,19 +318,28 @@
     }
 
     async function loadItems() {
-      // Supabase caps a query at 1000 rows by default; .range() overrides that.
-      const { data, error } = await supabaseClient
-        .from("items")
-        .select("*")
-        .neq("status", "sold")
-        .order("title", { ascending: true })
-        .range(0, 9999);
+      // Supabase's API caps each response at its configured "Max Rows" setting
+      // (1000 by default) regardless of .range() — so page through until done.
+      const pageSize = 1000;
+      let offset = 0;
+      let allData = [];
+      while (true) {
+        const { data, error } = await supabaseClient
+          .from("items")
+          .select("*")
+          .neq("status", "sold")
+          .order("title", { ascending: true })
+          .range(offset, offset + pageSize - 1);
 
-      if (error) {
-        document.getElementById("grid").innerHTML = `<p class="empty-note">Couldn't load items: ${error.message}</p>`;
-        return;
+        if (error) {
+          document.getElementById("grid").innerHTML = `<p class="empty-note">Couldn't load items: ${error.message}</p>`;
+          return;
+        }
+        allData = allData.concat(data);
+        if (data.length < pageSize) break;
+        offset += pageSize;
       }
-      allItems = data;
+      allItems = allData;
       renderGrid();
     }
 
