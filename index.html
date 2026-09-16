@@ -23,11 +23,16 @@
 
   <main>
     <div class="filters" id="filters"></div>
+    <div class="grid" id="categoryGrid" hidden></div>
     <button class="btn secondary" id="backToBrandsBtn" hidden style="margin:0 0 1rem;">&larr; Back to publishers</button>
     <div class="grid" id="brandGrid" hidden></div>
+    <div class="list-toolbar" id="listToolbar" hidden>
+      <input type="text" id="itemSearch" placeholder="Search titles..." />
+      <div class="letter-bar" id="letterBar"></div>
+    </div>
     <div class="grid" id="grid"></div>
     <div class="list-rows" id="listRows"></div>
-    <p class="empty-note" id="emptyNote" hidden>No items found in this category right now.</p>
+    <p class="empty-note" id="emptyNote" hidden>No items found.</p>
   </main>
 
   <div class="lightbox" id="lightbox" hidden>
@@ -47,6 +52,15 @@
     let allItems = [];
     let activeCategory = "all";
     let activeBrand = null;
+    let searchTerm = "";
+    let activeLetter = null;
+
+    function resetDrilldown() {
+      activeBrand = null;
+      searchTerm = "";
+      activeLetter = null;
+      document.getElementById("itemSearch").value = "";
+    }
 
     function renderFilters() {
       const filtersEl = document.getElementById("filters");
@@ -61,7 +75,7 @@
         btn.className = opt.slug === activeCategory ? "active" : "";
         btn.addEventListener("click", () => {
           activeCategory = opt.slug;
-          activeBrand = null;
+          resetDrilldown();
           renderFilters();
           renderGrid();
         });
@@ -74,20 +88,63 @@
       return brandsForCategory(activeCategory);
     }
 
+    function sortByTitle(items) {
+      return [...items].sort((a, b) => a.title.localeCompare(b.title));
+    }
+
     function renderGrid() {
+      const categoryGridEl = document.getElementById("categoryGrid");
       const gridEl = document.getElementById("grid");
       const listEl = document.getElementById("listRows");
       const brandGridEl = document.getElementById("brandGrid");
       const backBtn = document.getElementById("backToBrandsBtn");
+      const toolbarEl = document.getElementById("listToolbar");
       const emptyNote = document.getElementById("emptyNote");
 
-      const categoryBrands = currentCategoryBrands();
-      const showingBrandTiles = categoryBrands.length > 0 && !activeBrand;
+      // Top level: "All" shows category tiles instead of dumping every item.
+      if (activeCategory === "all") {
+        categoryGridEl.hidden = false;
+        brandGridEl.hidden = true;
+        gridEl.hidden = true;
+        listEl.hidden = true;
+        toolbarEl.hidden = true;
+        backBtn.hidden = true;
+        emptyNote.hidden = true;
 
-      backBtn.hidden = !(categoryBrands.length > 0 && activeBrand);
+        categoryGridEl.innerHTML = "";
+        sortByTitle(ALL_CATEGORIES.map((c) => ({ title: c.label, slug: c.slug }))).forEach((cat) => {
+          const count = allItems.filter((item) => item.category === cat.slug).length;
+          const card = document.createElement("div");
+          card.className = "card";
+          card.style.cursor = "pointer";
+          card.innerHTML = `
+            <div class="no-photo">${escapeHtml(cat.title)}</div>
+            <div class="card-body">
+              <h3>${escapeHtml(cat.title)}</h3>
+              <span class="price">${count} item${count === 1 ? "" : "s"}</span>
+            </div>
+          `;
+          card.addEventListener("click", () => {
+            activeCategory = cat.slug;
+            resetDrilldown();
+            renderFilters();
+            renderGrid();
+          });
+          categoryGridEl.appendChild(card);
+        });
+        return;
+      }
+
+      categoryGridEl.hidden = true;
+
+      const categoryBrands = currentCategoryBrands();
+      const showingBrandTiles = categoryBrands.length > 0 && !activeBrand && !searchTerm && !activeLetter;
+
+      backBtn.hidden = !(categoryBrands.length > 0 && (activeBrand || searchTerm || activeLetter));
       brandGridEl.hidden = !showingBrandTiles;
       gridEl.hidden = showingBrandTiles;
       listEl.hidden = showingBrandTiles;
+      toolbarEl.hidden = showingBrandTiles;
       emptyNote.hidden = true;
 
       if (showingBrandTiles) {
@@ -135,12 +192,24 @@
         return;
       }
 
-      const items = allItems.filter((item) => {
-        if (activeCategory !== "all" && item.category !== activeCategory) return false;
+      // Flat listing (category with no brands, or drilled into a brand, or a search/letter is active)
+      const scopedItems = allItems.filter((item) => {
+        if (item.category !== activeCategory) return false;
         if (activeBrand === "__none__") return !item.brand;
         if (activeBrand) return item.brand === activeBrand;
         return true;
       });
+
+      renderLetterBar(scopedItems);
+
+      const term = searchTerm.trim().toLowerCase();
+      const items = sortByTitle(
+        scopedItems.filter((item) => {
+          const matchesSearch = !term || item.title.toLowerCase().includes(term);
+          const matchesLetter = !activeLetter || item.title.trim()[0]?.toUpperCase() === activeLetter;
+          return matchesSearch && matchesLetter;
+        })
+      );
 
       const withPhotos = items.filter((item) => item.photo_urls && item.photo_urls[0]);
       const withoutPhotos = items.filter((item) => !(item.photo_urls && item.photo_urls[0]));
@@ -178,6 +247,42 @@
       });
     }
 
+    function renderLetterBar(scopedItems) {
+      const letterBarEl = document.getElementById("letterBar");
+      const available = new Set(
+        scopedItems.map((item) => item.title.trim()[0]?.toUpperCase()).filter(Boolean)
+      );
+      letterBarEl.innerHTML = "";
+
+      const allBtn = document.createElement("button");
+      allBtn.textContent = "All";
+      allBtn.className = !activeLetter ? "active" : "";
+      allBtn.addEventListener("click", () => {
+        activeLetter = null;
+        renderGrid();
+      });
+      letterBarEl.appendChild(allBtn);
+
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach((letter) => {
+        const btn = document.createElement("button");
+        btn.textContent = letter;
+        const hasItems = available.has(letter);
+        btn.disabled = !hasItems;
+        btn.className = activeLetter === letter ? "active" : "";
+        btn.addEventListener("click", () => {
+          activeLetter = letter;
+          renderGrid();
+        });
+        letterBarEl.appendChild(btn);
+      });
+    }
+
+    document.getElementById("itemSearch").addEventListener("input", (e) => {
+      searchTerm = e.target.value;
+      activeLetter = null;
+      renderGrid();
+    });
+
     function openLightbox(src, alt) {
       const lightbox = document.getElementById("lightbox");
       const img = document.getElementById("lightboxImg");
@@ -191,7 +296,7 @@
     }
 
     document.getElementById("backToBrandsBtn").addEventListener("click", () => {
-      activeBrand = null;
+      resetDrilldown();
       renderGrid();
     });
 
@@ -221,7 +326,7 @@
         .from("items")
         .select("*")
         .neq("status", "sold")
-        .order("created_at", { ascending: false })
+        .order("title", { ascending: true })
         .range(0, 9999);
 
       if (error) {

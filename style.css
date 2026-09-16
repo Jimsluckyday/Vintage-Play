@@ -154,6 +154,42 @@ main {
 
 #grid .card img { cursor: zoom-in; }
 
+.list-toolbar {
+  margin-bottom: 1.25rem;
+}
+
+.list-toolbar input[type="text"] {
+  max-width: 320px;
+  margin-bottom: 0.6rem;
+}
+
+.letter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.letter-bar button {
+  background: var(--bg-card);
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.letter-bar button.active {
+  background: var(--mustard);
+}
+
+.letter-bar button:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
 .list-rows {
   margin-top: 1.5rem;
   display: flex;
