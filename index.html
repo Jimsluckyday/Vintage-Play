@@ -46,7 +46,7 @@
       <p class="hint" id="shippingNoteText"></p>
 
       <div class="btn-row">
-        <button class="btn" id="cartCopyBtn">Copy Order Summary</button>
+        <button class="btn" id="cartSendBtn">Send Order Request</button>
       </div>
       <button class="btn danger" id="cartClearBtn" style="margin-top:0.5rem;">Clear Cart</button>
       <p class="hint" id="cartCopyStatus"></p>
@@ -88,6 +88,7 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   <script src="/config.js"></script>
   <script>
     let allItems = [];
@@ -559,14 +560,43 @@
       renderCartPanel();
     });
 
-    document.getElementById("cartCopyBtn").addEventListener("click", async () => {
+    document.getElementById("cartSendBtn").addEventListener("click", async () => {
       const statusEl = document.getElementById("cartCopyStatus");
-      if (cartLines().length === 0) return;
+      const btn = document.getElementById("cartSendBtn");
+      const lines = cartLines();
+      if (lines.length === 0) return;
+
+      btn.disabled = true;
+      statusEl.textContent = "Sending...";
+
+      const total = lines.reduce((sum, { item, qty }) => sum + Number(item.asking_price) * qty, 0);
+      const orderItems = lines.map(({ item, qty }) => ({
+        id: item.id, title: item.title, qty, price: Number(item.asking_price),
+      }));
+      const summaryText = buildOrderSummaryText();
+
+      const { error: dbError } = await supabaseClient.from("orders").insert({ items: orderItems, total });
+
+      let emailOk = true;
       try {
-        await navigator.clipboard.writeText(buildOrderSummaryText());
-        statusEl.textContent = "Copied! Paste this into a message on Kijiji, Facebook, or eBay.";
+        await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { message: summaryText });
       } catch (e) {
-        statusEl.textContent = "Couldn't copy automatically — select and copy the text yourself.";
+        emailOk = false;
+      }
+
+      try {
+        await navigator.clipboard.writeText(summaryText);
+      } catch (e) {
+        // clipboard unavailable — not critical, the request may still have gone through
+      }
+
+      btn.disabled = false;
+      if (dbError && !emailOk) {
+        statusEl.textContent = "Something went wrong sending this — please copy the summary above and message the seller directly.";
+      } else if (!emailOk) {
+        statusEl.textContent = "Request recorded! (Email notification failed, but it's saved.) Summary also copied to your clipboard.";
+      } else {
+        statusEl.textContent = "Order request sent! Summary also copied to your clipboard in case you'd like to message too.";
       }
     });
 
@@ -617,6 +647,7 @@
     }
 
     async function init() {
+      emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
       await loadCategories();
       await loadBrands();
       renderFilters();

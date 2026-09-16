@@ -1,6 +1,12 @@
 // Bump this by 1 every time this file (or admin.html/index.html) is redeployed.
 // Lets the page detect and warn if the browser is running a stale cached copy.
-const LOCAL_VERSION = "17";
+const LOCAL_VERSION = "18";
+
+// EmailJS lets the static site send a real email on order request with no backend.
+// The public key is designed by EmailJS to be safely exposed in client-side code.
+const EMAILJS_PUBLIC_KEY = "Wi-0Gg95ueHU1Puti";
+const EMAILJS_SERVICE_ID = "service_s37rjpc";
+const EMAILJS_TEMPLATE_ID = "template_xu2hlwo";
 
 // Where the cart's "Pay with PayPal" button sends buyers — paypal.me/<this>
 const PAYPAL_ME_HANDLE = "vintageplay";

@@ -34,6 +34,12 @@
     </div>
 
     <div class="section">
+      <h2>Orders (<span id="orderCount">0</span>)</h2>
+      <p class="hint">Requests buyers submit from the cart. You should also get an email for each one — this list is the backup record.</p>
+      <div id="orderList"></div>
+    </div>
+
+    <div class="section">
       <h2>Categories</h2>
       <label for="newCategoryLabel">Category Name</label>
       <input type="text" id="newCategoryLabel" placeholder="e.g. Books" />
@@ -353,6 +359,76 @@
       loginView.hidden = true;
       adminView.hidden = false;
       loadItems();
+      loadOrders();
+    }
+
+    async function loadOrders() {
+      const { data, error } = await supabaseClient
+        .from("orders")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        document.getElementById("orderList").innerHTML = `<p class="error-text">Couldn't load orders: ${error.message}</p>`;
+        return;
+      }
+      renderOrderList(data);
+    }
+
+    function renderOrderList(orders) {
+      document.getElementById("orderCount").textContent = orders.length;
+      const listEl = document.getElementById("orderList");
+      listEl.innerHTML = "";
+
+      if (orders.length === 0) {
+        listEl.innerHTML = `<p class="hint">No order requests yet.</p>`;
+        return;
+      }
+
+      orders.forEach((order) => {
+        const row = document.createElement("div");
+        row.className = "item-row";
+        const itemLines = (order.items || [])
+          .map((i) => `${i.qty}x ${escapeHtml(i.title)} ($${Number(i.price).toFixed(2)} each)`)
+          .join("<br>");
+        row.innerHTML = `
+          <div class="info">
+            <h4>Order — $${Number(order.total).toFixed(2)} <span class="meta">(${new Date(order.created_at).toLocaleString()})</span></h4>
+            <div class="meta">${itemLines}</div>
+            <div class="btn-row" style="margin-top:0.5rem;">
+              <select data-order-status="${order.id}" style="width:auto;">
+                <option value="new" ${order.status === "new" ? "selected" : ""}>New</option>
+                <option value="contacted" ${order.status === "contacted" ? "selected" : ""}>Contacted</option>
+                <option value="fulfilled" ${order.status === "fulfilled" ? "selected" : ""}>Fulfilled</option>
+                <option value="cancelled" ${order.status === "cancelled" ? "selected" : ""}>Cancelled</option>
+              </select>
+              <button class="btn danger" data-order-delete="${order.id}">Delete</button>
+            </div>
+          </div>
+        `;
+        listEl.appendChild(row);
+      });
+
+      listEl.querySelectorAll("[data-order-status]").forEach((select) =>
+        select.addEventListener("change", async () => {
+          const { error } = await supabaseClient
+            .from("orders")
+            .update({ status: select.value })
+            .eq("id", select.dataset.orderStatus);
+          if (error) alert(`Couldn't update: ${error.message}`);
+        })
+      );
+      listEl.querySelectorAll("[data-order-delete]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          if (!confirm("Delete this order record?")) return;
+          const { error } = await supabaseClient.from("orders").delete().eq("id", btn.dataset.orderDelete);
+          if (error) {
+            alert(`Couldn't delete: ${error.message}`);
+            return;
+          }
+          await loadOrders();
+        })
+      );
     }
 
     document.getElementById("loginBtn").addEventListener("click", async () => {
