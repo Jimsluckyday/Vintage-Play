@@ -23,8 +23,14 @@
   <main>
     <div class="filters" id="filters"></div>
     <div class="grid" id="grid"></div>
+    <div class="list-rows" id="listRows"></div>
     <p class="empty-note" id="emptyNote" hidden>No items found in this category right now.</p>
   </main>
+
+  <div class="lightbox" id="lightbox" hidden>
+    <span class="lightbox-close" id="lightboxClose">&times;</span>
+    <img id="lightboxImg" src="" alt="" />
+  </div>
 
   <footer>
     <p>Interested in an item? Message me on Kijiji, Facebook Marketplace, or eBay to arrange purchase and pickup.</p>
@@ -59,21 +65,25 @@
 
     function renderGrid() {
       const gridEl = document.getElementById("grid");
+      const listEl = document.getElementById("listRows");
       const emptyNote = document.getElementById("emptyNote");
       const items = allItems.filter(
         (item) => activeCategory === "all" || item.category === activeCategory
       );
 
+      const withPhotos = items.filter((item) => item.photo_urls && item.photo_urls[0]);
+      const withoutPhotos = items.filter((item) => !(item.photo_urls && item.photo_urls[0]));
+
       gridEl.innerHTML = "";
+      listEl.innerHTML = "";
       emptyNote.hidden = items.length > 0;
 
-      items.forEach((item) => {
+      withPhotos.forEach((item) => {
         const card = document.createElement("div");
         card.className = "card";
-
-        const photo = item.photo_urls && item.photo_urls[0];
+        const photo = item.photo_urls[0];
         card.innerHTML = `
-          ${photo ? `<img src="${photo}" alt="${escapeHtml(item.title)}" />` : `<div class="no-photo">No photo</div>`}
+          <img src="${photo}" alt="${escapeHtml(item.title)}" />
           <div class="card-body">
             <span class="tag">${categoryLabel(item.category)}</span>
             <h3>${escapeHtml(item.title)}</h3>
@@ -83,7 +93,42 @@
         `;
         gridEl.appendChild(card);
       });
+
+      withoutPhotos.forEach((item) => {
+        const row = document.createElement("div");
+        row.className = "list-row";
+        row.innerHTML = `
+          <span class="tag">${categoryLabel(item.category)}</span>
+          <span class="list-row-title">${escapeHtml(item.title)}</span>
+          <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
+          <span class="status ${item.status}">${item.status === "available" ? "" : item.status.toUpperCase()}</span>
+        `;
+        listEl.appendChild(row);
+      });
     }
+
+    function openLightbox(src, alt) {
+      const lightbox = document.getElementById("lightbox");
+      const img = document.getElementById("lightboxImg");
+      img.src = src;
+      img.alt = alt || "";
+      lightbox.hidden = false;
+    }
+
+    function closeLightbox() {
+      document.getElementById("lightbox").hidden = true;
+    }
+
+    document.getElementById("grid").addEventListener("click", (e) => {
+      if (e.target.tagName === "IMG") {
+        openLightbox(e.target.src, e.target.alt);
+      }
+    });
+    document.getElementById("lightbox").addEventListener("click", closeLightbox);
+    document.getElementById("lightboxClose").addEventListener("click", closeLightbox);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeLightbox();
+    });
 
     function escapeHtml(str) {
       const div = document.createElement("div");
