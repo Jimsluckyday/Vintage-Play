@@ -216,6 +216,10 @@ main {
   cursor: zoom-out;
 }
 
+.lightbox[hidden] {
+  display: none !important;
+}
+
 .lightbox img {
   max-width: 100%;
   max-height: 100%;
