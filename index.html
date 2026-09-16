@@ -23,13 +23,13 @@
 
   <main>
     <div class="filters" id="filters"></div>
-    <div class="grid" id="categoryGrid" hidden></div>
-    <button class="btn secondary" id="backToBrandsBtn" hidden style="margin:0 0 1rem;">&larr; Back to publishers</button>
-    <div class="grid" id="brandGrid" hidden></div>
-    <div class="list-toolbar" id="listToolbar" hidden>
+    <div class="list-toolbar" id="listToolbar">
       <input type="text" id="itemSearch" placeholder="Search titles..." />
       <div class="letter-bar" id="letterBar"></div>
     </div>
+    <div class="grid" id="categoryGrid" hidden></div>
+    <button class="btn secondary" id="backToBrandsBtn" hidden style="margin:0 0 1rem;">&larr; Back to publishers</button>
+    <div class="grid" id="brandGrid" hidden></div>
     <div class="grid" id="grid"></div>
     <div class="list-rows" id="listRows"></div>
     <p class="empty-note" id="emptyNote" hidden>No items found.</p>
@@ -98,20 +98,27 @@
       const listEl = document.getElementById("listRows");
       const brandGridEl = document.getElementById("brandGrid");
       const backBtn = document.getElementById("backToBrandsBtn");
-      const toolbarEl = document.getElementById("listToolbar");
       const emptyNote = document.getElementById("emptyNote");
 
-      // Top level: "All" shows category tiles instead of dumping every item.
-      if (activeCategory === "all") {
-        categoryGridEl.hidden = false;
-        brandGridEl.hidden = true;
-        gridEl.hidden = true;
-        listEl.hidden = true;
-        toolbarEl.hidden = true;
-        backBtn.hidden = true;
-        emptyNote.hidden = true;
+      const searching = !!(searchTerm.trim() || activeLetter);
+      const categoryBrands = currentCategoryBrands();
 
+      // Top level ("All"): category tiles, unless a search/letter is active — then a global flat search.
+      const showingCategoryTiles = activeCategory === "all" && !searching;
+      // Within a category that has brands: publisher tiles, unless drilled in or searching.
+      const showingBrandTiles = activeCategory !== "all" && categoryBrands.length > 0 && !activeBrand && !searching;
+      const showingFlatList = !showingCategoryTiles && !showingBrandTiles;
+
+      categoryGridEl.hidden = !showingCategoryTiles;
+      brandGridEl.hidden = !showingBrandTiles;
+      gridEl.hidden = !showingFlatList;
+      listEl.hidden = !showingFlatList;
+      backBtn.hidden = !(activeCategory !== "all" && categoryBrands.length > 0 && (activeBrand || searching));
+      emptyNote.hidden = true;
+
+      if (showingCategoryTiles) {
         categoryGridEl.innerHTML = "";
+        renderLetterBar(allItems);
         sortByTitle(ALL_CATEGORIES.map((c) => ({ title: c.label, slug: c.slug }))).forEach((cat) => {
           const count = allItems.filter((item) => item.category === cat.slug).length;
           const card = document.createElement("div");
@@ -135,20 +142,9 @@
         return;
       }
 
-      categoryGridEl.hidden = true;
-
-      const categoryBrands = currentCategoryBrands();
-      const showingBrandTiles = categoryBrands.length > 0 && !activeBrand && !searchTerm && !activeLetter;
-
-      backBtn.hidden = !(categoryBrands.length > 0 && (activeBrand || searchTerm || activeLetter));
-      brandGridEl.hidden = !showingBrandTiles;
-      gridEl.hidden = showingBrandTiles;
-      listEl.hidden = showingBrandTiles;
-      toolbarEl.hidden = showingBrandTiles;
-      emptyNote.hidden = true;
-
       if (showingBrandTiles) {
         brandGridEl.innerHTML = "";
+        renderLetterBar(allItems.filter((item) => item.category === activeCategory));
         categoryBrands.forEach((brand) => {
           const count = allItems.filter(
             (item) => item.category === activeCategory && item.brand === brand.slug
@@ -192,9 +188,10 @@
         return;
       }
 
-      // Flat listing (category with no brands, or drilled into a brand, or a search/letter is active)
+      // Flat listing: global search (activeCategory "all"), a category with no brands,
+      // drilled into a specific brand, or a search/letter overriding a tile view.
       const scopedItems = allItems.filter((item) => {
-        if (item.category !== activeCategory) return false;
+        if (activeCategory !== "all" && item.category !== activeCategory) return false;
         if (activeBrand === "__none__") return !item.brand;
         if (activeBrand) return item.brand === activeBrand;
         return true;
