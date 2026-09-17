@@ -95,6 +95,15 @@ main {
   border-bottom: 3px solid var(--ink);
 }
 
+/* Category/brand tiles are just an at-a-glance preview of what's in a
+   group, not a product photo to inspect — crop to a consistent portrait
+   shape instead of leaving ragged whitespace when source photos vary. */
+#categoryGrid .card img,
+#brandGrid .card img {
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+}
+
 .card .no-photo {
   width: 100%;
   aspect-ratio: 1 / 1;
