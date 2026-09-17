@@ -786,20 +786,24 @@
     }
 
     function buildListingText(item) {
-      const lines = [
-        item.title,
-        `Price: $${Number(item.asking_price).toFixed(2)}`,
-        "",
+      const detailLines = [
         item.description || "",
-        "",
         item.condition_notes ? `Condition: ${item.condition_notes}` : "",
         `Category: ${categoryLabel(item.category)}`,
         item.quantity > 1 ? `Quantity available: ${item.quantity}` : "",
-        "",
-        "Cash on pickup. Message me with any questions!",
-        "Buying multiple items? Happy to work out a bundle deal.",
+      ].filter((l) => l !== "");
+
+      const blocks = [
+        item.title,
+        `Price: $${Number(item.asking_price).toFixed(2)}`,
+        detailLines.join("\n"),
+        `----------\n${PICKUP_LOCATION_NOTE}\n${LISTING_SHIPPING_NOTE}`,
+        "Buying more than one item? Happy to work out a bundle deal - just ask!",
+        "Message me with any questions!",
+        `Looking for more? Check out my full catalog: ${SITE_URL}`,
       ];
-      return lines.filter((l) => l !== "").join("\n");
+
+      return blocks.filter((b) => b !== "").join("\n\n");
     }
 
     function toggleListing(id) {
