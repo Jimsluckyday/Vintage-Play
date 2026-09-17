@@ -78,10 +78,26 @@
 
   <div class="lightbox" id="lightbox" hidden>
     <span class="lightbox-close" id="lightboxClose">&times;</span>
-    <button type="button" class="lightbox-nav lightbox-prev" id="lightboxPrev" hidden>&lsaquo;</button>
-    <img id="lightboxImg" src="" alt="" />
-    <button type="button" class="lightbox-nav lightbox-next" id="lightboxNext" hidden>&rsaquo;</button>
-    <div class="lightbox-counter" id="lightboxCounter" hidden></div>
+    <div class="lightbox-content" id="lightboxContent">
+      <div class="lightbox-media" id="lightboxMedia">
+        <button type="button" class="lightbox-nav lightbox-prev" id="lightboxPrev" hidden>&lsaquo;</button>
+        <img id="lightboxImg" src="" alt="" hidden />
+        <div class="no-photo" id="lightboxNoPhoto" hidden style="width:100%;aspect-ratio:1/1;">No photo</div>
+        <button type="button" class="lightbox-nav lightbox-next" id="lightboxNext" hidden>&rsaquo;</button>
+        <div class="lightbox-counter" id="lightboxCounter" hidden></div>
+      </div>
+      <div class="lightbox-details" id="lightboxDetails">
+        <h2 id="lbTitle"></h2>
+        <div class="lb-meta-row">
+          <span class="price" id="lbPrice"></span>
+          <span class="tag" id="lbCondition" hidden></span>
+          <span class="tag" id="lbAge" hidden></span>
+        </div>
+        <p id="lbDescription" hidden></p>
+        <p class="lb-condition-notes" id="lbConditionNotes" hidden></p>
+        <button type="button" class="btn secondary" id="lbAddCartBtn">Add to Cart</button>
+      </div>
+    </div>
   </div>
 
   <footer>
@@ -288,7 +304,10 @@
           <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
           <span class="status ${item.status}">${item.status === "available" ? "" : item.status.toUpperCase()}</span>
           ${item.quantity > 1 ? `<span class="qty-note">${item.quantity} in stock</span>` : ""}
-          <button type="button" class="btn secondary" data-add-cart="${item.id}" style="margin-top:0.4rem;padding:0.35rem 0.7rem;font-size:0.8rem;">Add to Cart</button>
+          <div class="btn-row" style="margin-top:0.4rem;">
+            <button type="button" class="btn secondary" data-add-cart="${item.id}" style="padding:0.35rem 0.7rem;font-size:0.8rem;">Add to Cart</button>
+            <button type="button" class="btn-link" data-details="${item.id}">Details</button>
+          </div>
         </div>
       `;
     }
@@ -301,6 +320,7 @@
         <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
         <span class="status ${item.status}">${item.status === "available" ? "" : item.status.toUpperCase()}</span>
         ${item.quantity > 1 ? `<span class="qty-note">${item.quantity} in stock</span>` : ""}
+        <button type="button" class="btn-link" data-details="${item.id}">Details</button>
         <button type="button" class="btn secondary" data-add-cart="${item.id}" style="padding:0.2rem 0.6rem;font-size:0.75rem;margin-top:0;">Add to Cart</button>
       `;
     }
@@ -364,15 +384,22 @@
     let lightboxPhotos = [];
     let lightboxIndex = 0;
     let lightboxAlt = "";
+    let lightboxItemId = null;
 
     function renderLightboxImage() {
       const img = document.getElementById("lightboxImg");
+      const noPhoto = document.getElementById("lightboxNoPhoto");
       const counter = document.getElementById("lightboxCounter");
       const prevBtn = document.getElementById("lightboxPrev");
       const nextBtn = document.getElementById("lightboxNext");
 
-      img.src = lightboxPhotos[lightboxIndex];
-      img.alt = lightboxAlt;
+      const hasPhotos = lightboxPhotos.length > 0;
+      img.hidden = !hasPhotos;
+      noPhoto.hidden = hasPhotos;
+      if (hasPhotos) {
+        img.src = lightboxPhotos[lightboxIndex];
+        img.alt = lightboxAlt;
+      }
 
       const multi = lightboxPhotos.length > 1;
       prevBtn.hidden = !multi;
@@ -381,11 +408,36 @@
       if (multi) counter.textContent = `${lightboxIndex + 1} / ${lightboxPhotos.length}`;
     }
 
-    function openLightbox(photos, startIndex, alt) {
-      lightboxPhotos = photos;
-      lightboxIndex = startIndex || 0;
-      lightboxAlt = alt || "";
+    function openItemDetails(item) {
+      lightboxPhotos = item.photo_urls || [];
+      lightboxIndex = 0;
+      lightboxAlt = item.title;
+      lightboxItemId = item.id;
       renderLightboxImage();
+
+      document.getElementById("lbTitle").textContent = item.title;
+      document.getElementById("lbPrice").textContent = `$${Number(item.asking_price).toFixed(2)}`;
+
+      const conditionEl = document.getElementById("lbCondition");
+      conditionEl.hidden = !item.condition_grade;
+      conditionEl.textContent = item.condition_grade ? `Condition: ${item.condition_grade}` : "";
+
+      const ageEl = document.getElementById("lbAge");
+      ageEl.hidden = !item.release_year;
+      ageEl.textContent = item.release_year ? `Age: ${item.release_year}` : "";
+
+      const descEl = document.getElementById("lbDescription");
+      descEl.hidden = !item.description;
+      descEl.textContent = item.description || "";
+
+      const notesEl = document.getElementById("lbConditionNotes");
+      notesEl.hidden = !item.condition_notes;
+      notesEl.textContent = item.condition_notes ? `Condition notes: ${item.condition_notes}` : "";
+
+      const addCartBtn = document.getElementById("lbAddCartBtn");
+      addCartBtn.hidden = item.status !== "available";
+
+      document.getElementById("lightboxDetails").hidden = false;
       document.getElementById("lightbox").hidden = false;
     }
 
@@ -425,7 +477,11 @@
     function handleLightboxDelegate(e) {
       if (e.target.tagName === "IMG" && e.target.dataset.itemId) {
         const item = allItems.find((i) => i.id === e.target.dataset.itemId);
-        if (item) openLightbox(item.photo_urls, 0, item.title);
+        if (item) openItemDetails(item);
+      }
+      if (e.target.dataset.details) {
+        const item = allItems.find((i) => i.id === e.target.dataset.details);
+        if (item) openItemDetails(item);
       }
       if (e.target.dataset.addCart) {
         addToCart(e.target.dataset.addCart);
@@ -434,6 +490,11 @@
     document.getElementById("grid").addEventListener("click", handleLightboxDelegate);
     document.getElementById("newArrivalsGrid").addEventListener("click", handleLightboxDelegate);
     document.getElementById("listRows").addEventListener("click", handleLightboxDelegate);
+
+    document.getElementById("lightboxDetails").addEventListener("click", (e) => e.stopPropagation());
+    document.getElementById("lbAddCartBtn").addEventListener("click", () => {
+      if (lightboxItemId) addToCart(lightboxItemId);
+    });
 
     // --- Cart (client-side "order request" cart — no live payment processing) ---
     const CART_STORAGE_KEY = "vpc_cart";

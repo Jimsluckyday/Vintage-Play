@@ -78,11 +78,21 @@
         <option value="">None</option>
       </select>
 
-      <label for="condition_notes">Condition Notes</label>
-      <textarea id="condition_notes" rows="2"></textarea>
+      <label for="condition_grade">Condition (optional — leave blank when New/Used doesn't apply, e.g. comics)</label>
+      <select id="condition_grade">
+        <option value="">Not specified</option>
+        <option value="New">New</option>
+        <option value="Used">Used</option>
+      </select>
 
-      <label for="description">Description (extra details, backstory, what's included)</label>
+      <label for="release_year">Age / Year Released (as close as you can get, e.g. "1981" or "early 1990s")</label>
+      <input type="text" id="release_year" />
+
+      <label for="description">Description (what it is — shown to buyers)</label>
       <textarea id="description" rows="4"></textarea>
+
+      <label for="condition_notes">Condition Notes (any flaws/wear — be honest, keep it factual rather than negative)</label>
+      <textarea id="condition_notes" rows="2"></textarea>
 
       <label for="cost_basis">Cost Basis ($)</label>
       <input type="number" step="0.01" id="cost_basis" />
@@ -629,6 +639,8 @@
       document.getElementById("category").value = item.category || "games";
       populateBrandSelect();
       document.getElementById("brand").value = item.brand || "";
+      document.getElementById("condition_grade").value = item.condition_grade || "";
+      document.getElementById("release_year").value = item.release_year || "";
       document.getElementById("condition_notes").value = item.condition_notes || "";
       document.getElementById("description").value = item.description || "";
       document.getElementById("cost_basis").value = item.cost_basis || "";
@@ -649,6 +661,8 @@
       document.getElementById("category").value = "games";
       populateBrandSelect();
       document.getElementById("brand").value = "";
+      document.getElementById("condition_grade").value = "";
+      document.getElementById("release_year").value = "";
       document.getElementById("condition_notes").value = "";
       document.getElementById("description").value = "";
       document.getElementById("cost_basis").value = "";
@@ -684,6 +698,8 @@
         title: document.getElementById("title").value.trim(),
         category: document.getElementById("category").value,
         brand: document.getElementById("brand").value || null,
+        condition_grade: document.getElementById("condition_grade").value || null,
+        release_year: document.getElementById("release_year").value.trim() || null,
         condition_notes: document.getElementById("condition_notes").value.trim(),
         description: document.getElementById("description").value.trim(),
         cost_basis: parseFloat(document.getElementById("cost_basis").value) || null,
@@ -779,6 +795,8 @@
               title,
               category,
               brand: brand || null,
+              condition_grade: (row.condition_grade || "").trim() || null,
+              release_year: (row.release_year || "").trim() || null,
               condition_notes: (row.condition_notes || "").trim(),
               description: (row.description || "").trim(),
               cost_basis: row.cost_basis ? parseFloat(row.cost_basis) : null,
@@ -831,8 +849,10 @@
 
     function buildListingText(item) {
       const detailLines = [
+        item.condition_grade ? `Condition: ${item.condition_grade}` : "",
+        item.release_year ? `Age: ${item.release_year}` : "",
         item.description || "",
-        item.condition_notes ? `Condition: ${item.condition_notes}` : "",
+        item.condition_notes ? `Condition notes: ${item.condition_notes}` : "",
         `Category: ${categoryLabel(item.category)}`,
         item.quantity > 1 ? `Quantity available: ${item.quantity}` : "",
       ].filter((l) => l !== "");
