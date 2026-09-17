@@ -116,7 +116,7 @@
 
     <div class="section">
       <h2>Bulk Import (CSV)</h2>
-      <p class="hint">Upload a CSV with these columns: <code>title, category, brand, condition_notes, description, cost_basis, asking_price, quantity, status</code> (<code>brand</code> is optional — leave blank if not using brand tiles for this category). The <code>category</code> value must match an existing category slug (e.g. <code>comics</code>), and <code>brand</code> must match an existing brand slug — add those first above if they don't exist yet. Items import with no photo and show up in the compact list view on the catalog page until you add photos individually.</p>
+      <p class="hint">Upload a CSV with these columns: <code>title, category, brand, condition_notes, description, cost_basis, asking_price, quantity, status</code> (<code>brand</code> is optional — leave blank if not using brand tiles for this category). The <code>category</code> value must match an existing category slug (e.g. <code>comics</code>), and <code>brand</code> must match an existing brand slug — add those first above if they don't exist yet. Items import with no photo and show up in the compact list view on the catalog page until you add photos individually. Rows whose title exactly matches an item already in your inventory are skipped automatically (use the <code>quantity</code> column for multiple copies of the same item instead of separate rows).</p>
       <input type="file" id="bulkImportFile" accept=".csv" />
       <button class="btn secondary" id="bulkImportBtn" style="margin-top:0.5rem;">Import CSV</button>
       <p class="hint" id="bulkImportStatus"></p>
@@ -699,6 +699,18 @@
         return;
       }
 
+      if (!editingId) {
+        const existing = items.find((i) => i.title.toLowerCase() === payload.title.toLowerCase());
+        if (existing) {
+          const proceed = confirm(
+            `"${existing.title}" already exists (qty ${existing.quantity}, $${Number(existing.asking_price).toFixed(2)}).\n\n` +
+            `If you have another physical copy, click Cancel and increase the Quantity on the existing listing instead.\n\n` +
+            `Click OK to create a separate listing anyway (e.g. a different condition/price), or Cancel to stop.`
+          );
+          if (!proceed) return;
+        }
+      }
+
       const fileInput = document.getElementById("photos");
       try {
         if (fileInput.files.length > 0) {
@@ -743,8 +755,11 @@
         complete: async (results) => {
           const validSlugs = new Set(ALL_CATEGORIES.map((c) => c.slug));
           const validBrandSlugs = new Set(ALL_BRANDS.map((b) => b.slug));
+          const existingTitles = new Set(items.map((i) => i.title.toLowerCase()));
+          const seenInThisFile = new Set();
           const toInsert = [];
           let skipped = 0;
+          let skippedDuplicates = 0;
 
           results.data.forEach((row) => {
             const title = (row.title || "").trim();
@@ -754,6 +769,12 @@
               skipped++;
               return;
             }
+            const titleKey = title.toLowerCase();
+            if (existingTitles.has(titleKey) || seenInThisFile.has(titleKey)) {
+              skippedDuplicates++;
+              return;
+            }
+            seenInThisFile.add(titleKey);
             toInsert.push({
               title,
               category,
@@ -789,7 +810,9 @@
             statusEl.textContent = `Imported ${imported} / ${toInsert.length}...`;
           }
 
-          statusEl.textContent = `Done — imported ${imported} items.` + (skipped ? ` Skipped ${skipped} row(s) with a missing title or unrecognized category.` : "");
+          statusEl.textContent = `Done — imported ${imported} items.`
+            + (skipped ? ` Skipped ${skipped} row(s) with a missing title or unrecognized category.` : "")
+            + (skippedDuplicates ? ` Skipped ${skippedDuplicates} row(s) matching a title that already exists — increase quantity on the existing listing instead if you have another copy.` : "");
           fileInput.value = "";
           await loadItems();
         },

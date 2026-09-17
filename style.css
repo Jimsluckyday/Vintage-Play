@@ -547,6 +547,12 @@ button {
 .badge-new { background: var(--teal); color: #fff; }
 .badge-sale { background: var(--brick); color: #fff; }
 
+.qty-note {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--teal);
+}
+
 .listing-output {
   white-space: pre-wrap;
   background: #fff;
