@@ -78,7 +78,10 @@
 
   <div class="lightbox" id="lightbox" hidden>
     <span class="lightbox-close" id="lightboxClose">&times;</span>
+    <button type="button" class="lightbox-nav lightbox-prev" id="lightboxPrev" hidden>&lsaquo;</button>
     <img id="lightboxImg" src="" alt="" />
+    <button type="button" class="lightbox-nav lightbox-next" id="lightboxNext" hidden>&rsaquo;</button>
+    <div class="lightbox-counter" id="lightboxCounter" hidden></div>
   </div>
 
   <footer>
@@ -277,7 +280,7 @@
     function buildCardInnerHtml(item) {
       const photo = item.photo_urls && item.photo_urls[0];
       return `
-        ${photo ? `<img src="${photo}" alt="${escapeHtml(item.title)}" />` : `<div class="no-photo">No photo</div>`}
+        ${photo ? `<img src="${photo}" alt="${escapeHtml(item.title)}" data-item-id="${item.id}" />` : `<div class="no-photo">No photo</div>`}
         <div class="card-body">
           <span class="tag">${categoryLabel(item.category)}</span>
           ${item.promo_at ? `<span class="badge badge-sale" style="align-self:flex-start;">SALE</span>` : ""}
@@ -356,17 +359,61 @@
       renderGrid();
     });
 
-    function openLightbox(src, alt) {
-      const lightbox = document.getElementById("lightbox");
+    let lightboxPhotos = [];
+    let lightboxIndex = 0;
+    let lightboxAlt = "";
+
+    function renderLightboxImage() {
       const img = document.getElementById("lightboxImg");
-      img.src = src;
-      img.alt = alt || "";
-      lightbox.hidden = false;
+      const counter = document.getElementById("lightboxCounter");
+      const prevBtn = document.getElementById("lightboxPrev");
+      const nextBtn = document.getElementById("lightboxNext");
+
+      img.src = lightboxPhotos[lightboxIndex];
+      img.alt = lightboxAlt;
+
+      const multi = lightboxPhotos.length > 1;
+      prevBtn.hidden = !multi;
+      nextBtn.hidden = !multi;
+      counter.hidden = !multi;
+      if (multi) counter.textContent = `${lightboxIndex + 1} / ${lightboxPhotos.length}`;
+    }
+
+    function openLightbox(photos, startIndex, alt) {
+      lightboxPhotos = photos;
+      lightboxIndex = startIndex || 0;
+      lightboxAlt = alt || "";
+      renderLightboxImage();
+      document.getElementById("lightbox").hidden = false;
     }
 
     function closeLightbox() {
       document.getElementById("lightbox").hidden = true;
     }
+
+    function lightboxPrev() {
+      lightboxIndex = (lightboxIndex - 1 + lightboxPhotos.length) % lightboxPhotos.length;
+      renderLightboxImage();
+    }
+
+    function lightboxNext() {
+      lightboxIndex = (lightboxIndex + 1) % lightboxPhotos.length;
+      renderLightboxImage();
+    }
+
+    document.getElementById("lightboxPrev").addEventListener("click", (e) => {
+      e.stopPropagation();
+      lightboxPrev();
+    });
+    document.getElementById("lightboxNext").addEventListener("click", (e) => {
+      e.stopPropagation();
+      lightboxNext();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (document.getElementById("lightbox").hidden) return;
+      if (e.key === "ArrowLeft") lightboxPrev();
+      if (e.key === "ArrowRight") lightboxNext();
+    });
 
     document.getElementById("backToBrandsBtn").addEventListener("click", () => {
       resetDrilldown();
@@ -374,8 +421,9 @@
     });
 
     function handleLightboxDelegate(e) {
-      if (e.target.tagName === "IMG") {
-        openLightbox(e.target.src, e.target.alt);
+      if (e.target.tagName === "IMG" && e.target.dataset.itemId) {
+        const item = allItems.find((i) => i.id === e.target.dataset.itemId);
+        if (item) openLightbox(item.photo_urls, 0, item.title);
       }
       if (e.target.dataset.addCart) {
         addToCart(e.target.dataset.addCart);

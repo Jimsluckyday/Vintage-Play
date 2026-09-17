@@ -128,9 +128,13 @@
       <div class="btn-row">
         <input type="text" id="inventorySearch" placeholder="Search by title..." style="max-width:300px;" />
         <select id="inventoryCategoryFilter" style="max-width:220px;"></select>
+        <label style="display:flex;align-items:center;gap:0.35rem;margin:0;font-weight:400;">
+          <input type="checkbox" id="inventoryPhotoFilter" style="width:auto;" /> Only items with a photo
+        </label>
       </div>
       <p class="hint" id="inventoryFilterNote"></p>
       <div id="itemList"></div>
+      <button class="btn secondary" id="inventoryLoadMoreBtn" hidden>Load 100 More</button>
     </div>
   </div>
 
@@ -330,8 +334,13 @@
       renderCategoryManager();
     });
 
-    document.getElementById("inventorySearch").addEventListener("input", renderItemList);
-    document.getElementById("inventoryCategoryFilter").addEventListener("change", renderItemList);
+    document.getElementById("inventorySearch").addEventListener("input", resetInventoryPaging);
+    document.getElementById("inventoryCategoryFilter").addEventListener("change", resetInventoryPaging);
+    document.getElementById("inventoryPhotoFilter").addEventListener("change", resetInventoryPaging);
+    document.getElementById("inventoryLoadMoreBtn").addEventListener("click", () => {
+      inventoryPagesShown++;
+      renderItemList();
+    });
 
     async function checkSession() {
       await loadCategories();
@@ -477,6 +486,7 @@
     }
 
     const INVENTORY_PAGE_SIZE = 100;
+    let inventoryPagesShown = 1;
 
     function populateInventoryCategoryFilter() {
       const select = document.getElementById("inventoryCategoryFilter");
@@ -487,28 +497,36 @@
       if (previousValue) select.value = previousValue;
     }
 
+    function resetInventoryPaging() {
+      inventoryPagesShown = 1;
+      renderItemList();
+    }
+
     function renderItemList() {
       document.getElementById("itemCount").textContent = items.length;
 
       const searchTerm = document.getElementById("inventorySearch").value.trim().toLowerCase();
       const categoryFilter = document.getElementById("inventoryCategoryFilter").value;
+      const photoOnly = document.getElementById("inventoryPhotoFilter").checked;
 
       const filtered = items.filter((item) => {
         const matchesSearch = !searchTerm || item.title.toLowerCase().includes(searchTerm);
         const matchesCategory = categoryFilter === "all" || item.category === categoryFilter;
-        return matchesSearch && matchesCategory;
+        const matchesPhoto = !photoOnly || (item.photo_urls && item.photo_urls.length > 0);
+        return matchesSearch && matchesCategory && matchesPhoto;
       });
 
-      const shown = filtered.slice(0, INVENTORY_PAGE_SIZE);
+      const pageLimit = INVENTORY_PAGE_SIZE * inventoryPagesShown;
+      const shown = filtered.slice(0, pageLimit);
 
       const listEl = document.getElementById("itemList");
       listEl.innerHTML = "";
 
       const countNote = document.getElementById("inventoryFilterNote");
-      countNote.textContent =
-        filtered.length > shown.length
-          ? `Showing first ${shown.length} of ${filtered.length} matching items — narrow your search to see more.`
-          : `Showing ${filtered.length} of ${items.length} total items.`;
+      countNote.textContent = `Showing ${shown.length} of ${filtered.length} matching items (${items.length} total in inventory).`;
+
+      const loadMoreBtn = document.getElementById("inventoryLoadMoreBtn");
+      loadMoreBtn.hidden = filtered.length <= shown.length;
 
       shown.forEach((item) => {
         const row = document.createElement("div");
@@ -519,7 +537,7 @@
           item.promo_at ? `<span class="badge badge-sale">SALE</span>` : "",
         ].join(" ");
         row.innerHTML = `
-          ${photo ? `<img src="${photo}" alt="" />` : `<div class="no-photo" style="width:70px;height:70px;">No photo</div>`}
+          ${photo ? `<img src="${photo}" alt="" data-zoom-photo="${photo}" />` : `<div class="no-photo" style="width:110px;height:110px;">No photo</div>`}
           <div class="info">
             <h4>${escapeHtml(item.title)} <span class="meta">(${categoryLabel(item.category)})</span> ${badges}</h4>
             <div class="meta">$${Number(item.asking_price).toFixed(2)} &middot; Qty ${item.quantity} &middot; ${item.status}</div>
@@ -536,6 +554,9 @@
         listEl.appendChild(row);
       });
 
+      listEl.querySelectorAll('[data-zoom-photo]').forEach((img) =>
+        img.addEventListener("click", () => window.open(img.dataset.zoomPhoto, "_blank"))
+      );
       listEl.querySelectorAll('[data-action="edit"]').forEach((btn) =>
         btn.addEventListener("click", () => startEdit(btn.dataset.id))
       );
