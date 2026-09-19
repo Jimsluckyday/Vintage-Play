@@ -17,7 +17,24 @@
   <div class="version-tag">v<span id="versionLabel"></span></div>
 
   <button class="cart-toggle" id="cartToggleBtn">Cart (<span id="cartCount">0</span>)</button>
+  <button class="contact-toggle" id="contactToggleBtn">Contact</button>
   <div class="toast" id="cartToast" hidden></div>
+
+  <div class="cart-modal" id="contactModal" hidden>
+    <div class="cart-panel">
+      <div class="cart-panel-header">
+        <h2>Contact &amp; Where I Sell</h2>
+        <span class="lightbox-close" id="contactCloseBtn" style="position:static;color:var(--ink);">&times;</span>
+      </div>
+      <p>Found this site somewhere other than one of my listings? Here's where else Vintage Play Collectibles sells, and how to reach me directly.</p>
+      <div class="btn-row" id="sellerProfileLinks" style="margin:0.75rem 0;"></div>
+      <div class="pay-option">
+        <span>Email</span>
+        <button class="btn secondary" id="copyContactEmailBtn" style="margin-top:0;padding:0.3rem 0.7rem;font-size:0.8rem;">Copy Email</button>
+      </div>
+      <p class="hint" id="contactCopyStatus" style="margin-top:0.5rem;"></p>
+    </div>
+  </div>
 
   <div class="cart-modal" id="cartModal" hidden>
     <div class="cart-panel">
@@ -103,7 +120,7 @@
 
   <footer>
     <p class="footer-callout">Interested in an item? Message me on Kijiji, Facebook Marketplace, or eBay to arrange purchase and pickup.</p>
-    <p>Buying more than one item? I'm always happy to work out a bundle deal — just ask!</p>
+    <p class="footer-callout">Buying more than one item? I'm always happy to work out a bundle deal — just ask!</p>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -677,6 +694,46 @@
     document.getElementById("cartCloseBtn").addEventListener("click", closeCart);
     document.getElementById("cartModal").addEventListener("click", (e) => {
       if (e.target.id === "cartModal") closeCart();
+    });
+
+    function renderSellerProfileLinks() {
+      const el = document.getElementById("sellerProfileLinks");
+      el.innerHTML = "";
+      SELLER_PROFILES.forEach((profile) => {
+        if (!profile.url) return;
+        const link = document.createElement("a");
+        link.href = profile.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.className = "btn secondary";
+        link.style.cssText = "margin-top:0;padding:0.35rem 0.8rem;font-size:0.85rem;";
+        link.textContent = profile.label;
+        el.appendChild(link);
+      });
+    }
+
+    function openContact() {
+      renderSellerProfileLinks();
+      document.getElementById("contactCopyStatus").textContent = "";
+      document.getElementById("contactModal").hidden = false;
+    }
+
+    function closeContact() {
+      document.getElementById("contactModal").hidden = true;
+    }
+
+    document.getElementById("contactToggleBtn").addEventListener("click", openContact);
+    document.getElementById("contactCloseBtn").addEventListener("click", closeContact);
+    document.getElementById("contactModal").addEventListener("click", (e) => {
+      if (e.target.id === "contactModal") closeContact();
+    });
+    document.getElementById("copyContactEmailBtn").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(ETRANSFER_EMAIL);
+        document.getElementById("contactCopyStatus").textContent = "Email copied.";
+      } catch (e) {
+        document.getElementById("contactCopyStatus").textContent = "Couldn't copy — select and copy the email manually.";
+      }
     });
 
     document.getElementById("cartClearBtn").addEventListener("click", () => {

@@ -1,9 +1,19 @@
 // Bump this by 1 every time this file (or admin.html/index.html) is redeployed.
 // Lets the page detect and warn if the browser is running a stale cached copy.
-const LOCAL_VERSION = "30";
+const LOCAL_VERSION = "31";
 
 // Public site URL — used in the Kijiji/FB listing generator to point buyers back to the full catalog.
 const SITE_URL = "https://vintage-play.pages.dev";
+
+// Shown in the "Contact" panel so someone who finds the site without coming
+// from one of these listings (e.g. a shared link) can see where else this
+// inventory is for sale. A blank url hides that platform's button until
+// it's filled in — no need to remove entries you haven't gotten to yet.
+const SELLER_PROFILES = [
+  { label: "Kijiji", url: "" },
+  { label: "Facebook Marketplace", url: "" },
+  { label: "eBay", url: "" },
+];
 
 // Standing rule for Kijiji/FB Marketplace listing text: no payment details in the ad
 // itself (arranged privately once a real buyer reaches out) — pickup location/shipping
