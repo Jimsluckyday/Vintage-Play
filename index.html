@@ -17,6 +17,7 @@
   <div class="version-tag">v<span id="versionLabel"></span></div>
 
   <button class="cart-toggle" id="cartToggleBtn">Cart (<span id="cartCount">0</span>)</button>
+  <div class="toast" id="cartToast" hidden></div>
 
   <div class="cart-modal" id="cartModal" hidden>
     <div class="cart-panel">
@@ -516,6 +517,17 @@
       renderCartBadge();
     }
 
+    let cartToastTimer = null;
+    function showCartToast(message) {
+      const toast = document.getElementById("cartToast");
+      toast.textContent = message;
+      toast.hidden = false;
+      clearTimeout(cartToastTimer);
+      cartToastTimer = setTimeout(() => {
+        toast.hidden = true;
+      }, 2200);
+    }
+
     function addToCart(itemId) {
       const item = allItems.find((i) => i.id === itemId);
       if (!item) return;
@@ -523,11 +535,16 @@
       const existing = cart.find((c) => c.id === itemId);
       const maxQty = item.quantity || 1;
       if (existing) {
-        existing.qty = Math.min(existing.qty + 1, maxQty);
+        if (existing.qty >= maxQty) {
+          showCartToast(`Already have all ${maxQty} in your cart`);
+          return;
+        }
+        existing.qty += 1;
       } else {
         cart.push({ id: itemId, qty: 1 });
       }
       saveCart(cart);
+      showCartToast(`Added to cart: ${item.title}`);
     }
 
     function removeFromCart(itemId) {
