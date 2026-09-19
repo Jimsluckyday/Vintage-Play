@@ -36,6 +36,23 @@
     </div>
   </div>
 
+  <div class="cart-modal" id="returnsModal" hidden>
+    <div class="cart-panel">
+      <div class="cart-panel-header">
+        <h2>Returns &amp; Warranty</h2>
+        <span class="lightbox-close" id="returnsCloseBtn" style="position:static;color:var(--ink);">&times;</span>
+      </div>
+      <p>Everything I sell is used/vintage unless a listing says otherwise, and I describe each item's condition as accurately as I can. Because these are pre-owned collectibles, here's what to expect:</p>
+      <ul style="margin:0.75rem 0; padding-left:1.2rem; line-height:1.6;">
+        <li><strong>Local pickup:</strong> Please look over the item before you pay — once you've paid and taken it home, the sale is final.</li>
+        <li><strong>Consoles, games, and electronics:</strong> These are tested before listing, but occasionally something doesn't show up right away (a disc that skips, a console issue that wasn't apparent in testing). If that happens, message me within 7 days of pickup/delivery and I'll work with you on a repair, replacement, or partial refund.</li>
+        <li><strong>Shipped items:</strong> If something arrives significantly different than described, or was damaged in transit, message me within 3 days of delivery and I'll make it right.</li>
+        <li>No returns for buyer's remorse, or once an item's been used beyond what's needed to check it works.</li>
+        <li>All returns and refunds are at my discretion. I want to be fair, but I reserve the right to decline a request if I feel the situation doesn't warrant one.</li>
+      </ul>
+    </div>
+  </div>
+
   <div class="cart-modal" id="cartModal" hidden>
     <div class="cart-panel">
       <div class="cart-panel-header">
@@ -46,6 +63,7 @@
       <p class="empty-note" id="cartEmptyNote" hidden>Your cart is empty.</p>
       <div class="cart-total">Total: $<span id="cartTotal">0.00</span></div>
       <p class="hint">This isn't an automatic checkout — sending a request lets me know what you're after so we can arrange payment and pickup/shipping together.</p>
+      <button type="button" class="btn-link" id="returnsToggleBtnCart">Returns &amp; Warranty policy</button>
 
       <div class="section" style="padding:0;margin:0.75rem 0;">
         <h3 style="font-size:0.95rem;margin:0 0 0.5rem;">How to Pay</h3>
@@ -121,6 +139,7 @@
   <footer>
     <p class="footer-callout">Interested in an item? Message me on Kijiji, Facebook Marketplace, or eBay to arrange purchase and pickup.</p>
     <p class="footer-callout">Buying more than one item? I'm always happy to work out a bundle deal — just ask!</p>
+    <button type="button" class="btn secondary" id="returnsToggleBtnFooter" style="margin-top:0.75rem;">Returns &amp; Warranty</button>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -700,15 +719,25 @@
       const el = document.getElementById("sellerProfileLinks");
       el.innerHTML = "";
       SELLER_PROFILES.forEach((profile) => {
-        if (!profile.url) return;
-        const link = document.createElement("a");
-        link.href = profile.url;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        link.className = "btn secondary";
-        link.style.cssText = "margin-top:0;padding:0.35rem 0.8rem;font-size:0.85rem;";
-        link.textContent = profile.label;
-        el.appendChild(link);
+        if (profile.url) {
+          const link = document.createElement("a");
+          link.href = profile.url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.className = "btn secondary";
+          link.style.cssText = "margin-top:0;padding:0.35rem 0.8rem;font-size:0.85rem;";
+          link.textContent = profile.label;
+          el.appendChild(link);
+        } else {
+          const placeholder = document.createElement("button");
+          placeholder.type = "button";
+          placeholder.className = "btn secondary";
+          placeholder.disabled = true;
+          placeholder.title = "Coming soon";
+          placeholder.style.cssText = "margin-top:0;padding:0.35rem 0.8rem;font-size:0.85rem;opacity:0.5;cursor:not-allowed;";
+          placeholder.textContent = `${profile.label} (coming soon)`;
+          el.appendChild(placeholder);
+        }
       });
     }
 
@@ -734,6 +763,19 @@
       } catch (e) {
         document.getElementById("contactCopyStatus").textContent = "Couldn't copy — select and copy the email manually.";
       }
+    });
+
+    function openReturns() {
+      document.getElementById("returnsModal").hidden = false;
+    }
+    function closeReturns() {
+      document.getElementById("returnsModal").hidden = true;
+    }
+    document.getElementById("returnsToggleBtnFooter").addEventListener("click", openReturns);
+    document.getElementById("returnsToggleBtnCart").addEventListener("click", openReturns);
+    document.getElementById("returnsCloseBtn").addEventListener("click", closeReturns);
+    document.getElementById("returnsModal").addEventListener("click", (e) => {
+      if (e.target.id === "returnsModal") closeReturns();
     });
 
     document.getElementById("cartClearBtn").addEventListener("click", () => {

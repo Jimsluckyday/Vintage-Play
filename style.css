@@ -339,6 +339,11 @@ main {
   padding: 1.5rem;
 }
 
+/* Can be opened from inside the cart modal, so it needs to stack above it. */
+#returnsModal {
+  z-index: 2100;
+}
+
 .cart-panel {
   background: var(--bg-card);
   border: 3px solid var(--ink);
