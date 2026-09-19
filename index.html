@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Vintage Play Collectibles</title>
+  <title>Vintage Play Collectables</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet" />
@@ -26,7 +26,7 @@
         <h2>Contact &amp; Where I Sell</h2>
         <span class="lightbox-close" id="contactCloseBtn" style="position:static;color:var(--ink);">&times;</span>
       </div>
-      <p>Found this site somewhere other than one of my listings? Here's where else Vintage Play Collectibles sells, and how to reach me directly.</p>
+      <p>Found this site somewhere other than one of my listings? Here's where else Vintage Play Collectables sells, and how to reach me directly.</p>
       <div class="btn-row" id="sellerProfileLinks" style="margin:0.75rem 0;"></div>
       <div class="pay-option">
         <span>Email</span>
@@ -90,7 +90,7 @@
   </div>
 
   <header>
-    <h1>Vintage Play Collectibles</h1>
+    <h1>Vintage Play Collectables</h1>
     <p>Video games &middot; movies &middot; music &middot; toys &middot; comics &middot; sports cards</p>
   </header>
 
@@ -648,7 +648,7 @@
       const lines = cartLines();
       const total = lines.reduce((sum, { item, qty }) => sum + Number(item.asking_price) * qty, 0);
       const body = [
-        "Order Request - Vintage Play Collectibles",
+        "Order Request - Vintage Play Collectables",
         "",
         ...lines.map(({ item, qty }) => `${qty}x ${item.title} - $${Number(item.asking_price).toFixed(2)} each = $${(Number(item.asking_price) * qty).toFixed(2)}`),
         "",
