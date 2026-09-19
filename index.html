@@ -37,14 +37,13 @@
           <button class="btn secondary" id="cartPayBtn" style="margin-top:0;padding:0.3rem 0.7rem;font-size:0.8rem;">Pay with PayPal</button>
         </div>
         <div class="pay-option">
-          <span>E-Transfer: <code id="etransferEmailText"></code></span>
+          <span>E-Transfer</span>
           <button class="btn secondary" id="copyEtransferBtn" style="margin-top:0;padding:0.3rem 0.7rem;font-size:0.8rem;">Copy Email</button>
         </div>
-        <div id="cryptoOptions"></div>
-        <p class="hint" style="margin-top:0.5rem;">I also accept crypto via a couple of other wallets — just ask if BTC doesn't work for you.</p>
+        <p class="hint" style="margin-top:0.5rem;">Other cryptocurrency payment options available upon request.</p>
       </div>
 
-      <p class="hint" id="shippingNoteText"></p>
+      <p class="shipping-note" id="shippingNoteText"></p>
 
       <div class="btn-row">
         <button class="btn" id="cartSendBtn">Send Order Request</button>
@@ -622,7 +621,7 @@
         "Payment options:",
         `- PayPal: https://paypal.me/${PAYPAL_ME_HANDLE}/${total.toFixed(2)}`,
         `- E-Transfer: ${ETRANSFER_EMAIL}`,
-        ...CRYPTO_OPTIONS.map((c) => `- Crypto (${c.label}): ${c.address}`),
+        "- Other cryptocurrency payment available upon request",
         "",
         SHIPPING_NOTE,
       ];
@@ -630,31 +629,7 @@
     }
 
     function renderPaymentOptions() {
-      document.getElementById("etransferEmailText").textContent = ETRANSFER_EMAIL;
       document.getElementById("shippingNoteText").textContent = SHIPPING_NOTE;
-
-      const cryptoEl = document.getElementById("cryptoOptions");
-      cryptoEl.innerHTML = "";
-      CRYPTO_OPTIONS.forEach((coin, i) => {
-        const row = document.createElement("div");
-        row.className = "pay-option";
-        row.innerHTML = `
-          <span>${escapeHtml(coin.label)}: <code>${coin.address.slice(0, 10)}...${coin.address.slice(-6)}</code></span>
-          <button class="btn secondary" data-copy-crypto="${i}" style="margin-top:0;padding:0.3rem 0.7rem;font-size:0.8rem;">Copy Address</button>
-        `;
-        cryptoEl.appendChild(row);
-      });
-      cryptoEl.querySelectorAll("[data-copy-crypto]").forEach((btn) =>
-        btn.addEventListener("click", async () => {
-          const coin = CRYPTO_OPTIONS[Number(btn.dataset.copyCrypto)];
-          try {
-            await navigator.clipboard.writeText(coin.address);
-            document.getElementById("cartCopyStatus").textContent = `${coin.label} address copied.`;
-          } catch (e) {
-            document.getElementById("cartCopyStatus").textContent = "Couldn't copy — select and copy the address manually.";
-          }
-        })
-      );
     }
 
     document.getElementById("copyEtransferBtn").addEventListener("click", async () => {
