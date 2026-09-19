@@ -552,6 +552,12 @@ footer {
   font-size: 0.85rem;
 }
 
+.footer-callout {
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--ink);
+}
+
 footer a { color: var(--brick); font-weight: 700; }
 
 /* Admin page */
