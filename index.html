@@ -40,7 +40,7 @@
           <span>E-Transfer</span>
           <button class="btn secondary" id="copyEtransferBtn" style="margin-top:0;padding:0.3rem 0.7rem;font-size:0.8rem;">Copy Email</button>
         </div>
-        <p class="hint" style="margin-top:0.5rem;">Other cryptocurrency payment options available upon request.</p>
+        <div id="cryptoOptions"></div>
       </div>
 
       <p class="shipping-note" id="shippingNoteText"></p>
@@ -621,7 +621,7 @@
         "Payment options:",
         `- PayPal: https://paypal.me/${PAYPAL_ME_HANDLE}/${total.toFixed(2)}`,
         `- E-Transfer: ${ETRANSFER_EMAIL}`,
-        "- Other cryptocurrency payment available upon request",
+        ...CRYPTO_OPTIONS.map((c) => `- Crypto (${c.label}): ${c.address}`),
         "",
         SHIPPING_NOTE,
       ];
@@ -630,6 +630,29 @@
 
     function renderPaymentOptions() {
       document.getElementById("shippingNoteText").textContent = SHIPPING_NOTE;
+
+      const cryptoEl = document.getElementById("cryptoOptions");
+      cryptoEl.innerHTML = "";
+      CRYPTO_OPTIONS.forEach((coin, i) => {
+        const row = document.createElement("div");
+        row.className = "pay-option";
+        row.innerHTML = `
+          <span>Crypto (${escapeHtml(coin.label)})</span>
+          <button class="btn secondary" data-copy-crypto="${i}" style="margin-top:0;padding:0.3rem 0.7rem;font-size:0.8rem;">Copy Address</button>
+        `;
+        cryptoEl.appendChild(row);
+      });
+      cryptoEl.querySelectorAll("[data-copy-crypto]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          const coin = CRYPTO_OPTIONS[Number(btn.dataset.copyCrypto)];
+          try {
+            await navigator.clipboard.writeText(coin.address);
+            document.getElementById("cartCopyStatus").textContent = `${coin.label} address copied.`;
+          } catch (e) {
+            document.getElementById("cartCopyStatus").textContent = "Couldn't copy — select and copy the address manually.";
+          }
+        })
+      );
     }
 
     document.getElementById("copyEtransferBtn").addEventListener("click", async () => {

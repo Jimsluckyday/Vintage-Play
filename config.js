@@ -1,6 +1,6 @@
 // Bump this by 1 every time this file (or admin.html/index.html) is redeployed.
 // Lets the page detect and warn if the browser is running a stale cached copy.
-const LOCAL_VERSION = "28";
+const LOCAL_VERSION = "29";
 
 // Public site URL — used in the Kijiji/FB listing generator to point buyers back to the full catalog.
 const SITE_URL = "https://vintage-play.pages.dev";
@@ -24,10 +24,10 @@ const EMAILJS_TEMPLATE_ID = "template_xu2hlwo";
 const PAYPAL_ME_HANDLE = "vintageplay";
 
 // Additional manual payment options shown in the cart's "How to Pay" section.
-// Crypto is intentionally NOT listed here — the cart just tells buyers it's
-// available on request, and the actual wallet address is shared privately
-// per-buyer instead of sitting in this publicly-servable file.
 const ETRANSFER_EMAIL = "Jamesherder@yahoo.ca";
+const CRYPTO_OPTIONS = [
+  { label: "BTC", address: "bc1qjxt4ew7f3cvh0gvaux0h0ajfeyj9zzh8w38rznjw4jz377rl3pqsrucea4" },
+];
 const SHIPPING_NOTE = "Local pickup preferred. Shipping available via Canada Post — cost quoted separately after the item is weighed and packed.";
 
 // Supabase project connection details.
