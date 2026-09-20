@@ -336,6 +336,7 @@
         ${photo ? `<img src="${photo}" alt="${escapeHtml(item.title)}" data-item-id="${item.id}" />` : `<div class="no-photo">No photo</div>`}
         <div class="card-body">
           <span class="tag">${categoryLabel(item.category)}</span>
+          ${item.condition_grade === "New" ? `<span class="badge badge-new" style="align-self:flex-start;">NEW</span>` : ""}
           ${item.highlight_note ? `<span class="badge badge-highlight" style="align-self:flex-start;">${escapeHtml(item.highlight_note)}</span>` : ""}
           ${item.promo_at ? `<span class="badge badge-sale" style="align-self:flex-start;">SALE</span>` : ""}
           <h3>${escapeHtml(item.title)}</h3>
@@ -353,6 +354,7 @@
     function buildListRowInnerHtml(item) {
       return `
         <span class="tag">${categoryLabel(item.category)}</span>
+        ${item.condition_grade === "New" ? `<span class="badge badge-new">NEW</span>` : ""}
         ${item.highlight_note ? `<span class="badge badge-highlight">${escapeHtml(item.highlight_note)}</span>` : ""}
         ${item.promo_at ? `<span class="badge badge-sale">SALE</span>` : ""}
         <span class="list-row-title">${escapeHtml(item.title)}</span>
