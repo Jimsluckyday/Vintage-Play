@@ -124,6 +124,7 @@
       </div>
       <div class="lightbox-details" id="lightboxDetails">
         <h2 id="lbTitle"></h2>
+        <span class="badge badge-highlight" id="lbHighlight" hidden style="margin-bottom:0.5rem;"></span>
         <div class="lb-meta-row">
           <span class="price" id="lbPrice"></span>
           <span class="tag" id="lbCondition" hidden></span>
@@ -335,6 +336,7 @@
         ${photo ? `<img src="${photo}" alt="${escapeHtml(item.title)}" data-item-id="${item.id}" />` : `<div class="no-photo">No photo</div>`}
         <div class="card-body">
           <span class="tag">${categoryLabel(item.category)}</span>
+          ${item.highlight_note ? `<span class="badge badge-highlight" style="align-self:flex-start;">${escapeHtml(item.highlight_note)}</span>` : ""}
           ${item.promo_at ? `<span class="badge badge-sale" style="align-self:flex-start;">SALE</span>` : ""}
           <h3>${escapeHtml(item.title)}</h3>
           <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
@@ -351,6 +353,7 @@
     function buildListRowInnerHtml(item) {
       return `
         <span class="tag">${categoryLabel(item.category)}</span>
+        ${item.highlight_note ? `<span class="badge badge-highlight">${escapeHtml(item.highlight_note)}</span>` : ""}
         ${item.promo_at ? `<span class="badge badge-sale">SALE</span>` : ""}
         <span class="list-row-title">${escapeHtml(item.title)}</span>
         <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
@@ -453,6 +456,10 @@
 
       document.getElementById("lbTitle").textContent = item.title;
       document.getElementById("lbPrice").textContent = `$${Number(item.asking_price).toFixed(2)}`;
+
+      const highlightEl = document.getElementById("lbHighlight");
+      highlightEl.hidden = !item.highlight_note;
+      highlightEl.textContent = item.highlight_note || "";
 
       const conditionEl = document.getElementById("lbCondition");
       conditionEl.hidden = !item.condition_grade;

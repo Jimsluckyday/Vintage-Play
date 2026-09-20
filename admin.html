@@ -88,6 +88,9 @@
       <label for="release_year">Age / Year Released (as close as you can get, e.g. "1981" or "early 1990s")</label>
       <input type="text" id="release_year" />
 
+      <label for="highlight_note">Highlight Badge (optional — short, shown directly on the card so buyers don't have to open Details. E.g. "1st App Red Hood", "Sealed", "Rare")</label>
+      <input type="text" id="highlight_note" maxlength="24" />
+
       <label for="description">Description (what it is — shown to buyers)</label>
       <textarea id="description" rows="4"></textarea>
 
@@ -127,7 +130,7 @@
 
     <div class="section">
       <h2>Bulk Import (CSV)</h2>
-      <p class="hint">Upload a CSV with these columns: <code>title, category, brand, condition_notes, description, cost_basis, asking_price, quantity, status</code> (<code>brand</code> is optional — leave blank if not using brand tiles for this category). The <code>category</code> value must match an existing category slug (e.g. <code>comics</code>), and <code>brand</code> must match an existing brand slug — add those first above if they don't exist yet. Items import with no photo and show up in the compact list view on the catalog page until you add photos individually. Rows whose title exactly matches an item already in your inventory are skipped automatically (use the <code>quantity</code> column for multiple copies of the same item instead of separate rows).</p>
+      <p class="hint">Upload a CSV with these columns: <code>title, category, brand, condition_grade, release_year, highlight_note, condition_notes, description, cost_basis, asking_price, quantity, status</code> (<code>brand</code>, <code>condition_grade</code>, <code>release_year</code>, and <code>highlight_note</code> are all optional). The <code>category</code> value must match an existing category slug (e.g. <code>comics</code>), and <code>brand</code> must match an existing brand slug — add those first above if they don't exist yet. Items import with no photo and show up in the compact list view on the catalog page until you add photos individually. Rows whose title exactly matches an item already in your inventory are skipped automatically (use the <code>quantity</code> column for multiple copies of the same item instead of separate rows).</p>
       <input type="file" id="bulkImportFile" accept=".csv" />
       <button class="btn secondary" id="bulkImportBtn" style="margin-top:0.5rem;">Import CSV</button>
       <p class="hint" id="bulkImportStatus"></p>
@@ -686,6 +689,7 @@
       document.getElementById("brand").value = item.brand || "";
       document.getElementById("condition_grade").value = item.condition_grade || "";
       document.getElementById("release_year").value = item.release_year || "";
+      document.getElementById("highlight_note").value = item.highlight_note || "";
       document.getElementById("condition_notes").value = item.condition_notes || "";
       document.getElementById("description").value = item.description || "";
       document.getElementById("cost_basis").value = item.cost_basis || "";
@@ -709,6 +713,7 @@
       document.getElementById("brand").value = "";
       document.getElementById("condition_grade").value = "";
       document.getElementById("release_year").value = "";
+      document.getElementById("highlight_note").value = "";
       document.getElementById("condition_notes").value = "";
       document.getElementById("description").value = "";
       document.getElementById("cost_basis").value = "";
@@ -747,6 +752,7 @@
         brand: document.getElementById("brand").value || null,
         condition_grade: document.getElementById("condition_grade").value || null,
         release_year: document.getElementById("release_year").value.trim() || null,
+        highlight_note: document.getElementById("highlight_note").value.trim() || null,
         condition_notes: document.getElementById("condition_notes").value.trim(),
         description: document.getElementById("description").value.trim(),
         cost_basis: parseFloat(document.getElementById("cost_basis").value) || null,
@@ -844,6 +850,7 @@
               brand: brand || null,
               condition_grade: (row.condition_grade || "").trim() || null,
               release_year: (row.release_year || "").trim() || null,
+              highlight_note: (row.highlight_note || "").trim() || null,
               condition_notes: (row.condition_notes || "").trim(),
               description: (row.description || "").trim(),
               cost_basis: row.cost_basis ? parseFloat(row.cost_basis) : null,
@@ -906,6 +913,7 @@
 
       const blocks = [
         item.title,
+        item.highlight_note ? `★ ${item.highlight_note} ★` : "",
         `Price: $${Number(item.asking_price).toFixed(2)}`,
         detailLines.join("\n"),
         `----------\n${PICKUP_LOCATION_NOTE}\n${LISTING_SHIPPING_NOTE}`,

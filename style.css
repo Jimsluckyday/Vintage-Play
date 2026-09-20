@@ -267,7 +267,8 @@ main {
 .list-rows[hidden],
 .cart-modal[hidden],
 .lightbox-media .no-photo[hidden],
-.toast[hidden] {
+.toast[hidden],
+.badge[hidden] {
   display: none !important;
 }
 
@@ -715,6 +716,7 @@ button {
 
 .badge-new { background: var(--teal); color: #fff; }
 .badge-sale { background: var(--brick); color: #fff; }
+.badge-highlight { background: var(--mustard); color: var(--ink); border: 2px solid var(--ink); }
 
 .qty-note {
   font-size: 0.75rem;
