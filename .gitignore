@@ -9,3 +9,7 @@ listings/
 *.gif
 *.csv
 Product Pictures/
+
+# Site assets are the exception — these ship with the deployed site, unlike
+# the product photos above (which live in Supabase Storage instead).
+!logo.png
