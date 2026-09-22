@@ -204,6 +204,19 @@ main {
   margin-bottom: 0.6rem;
 }
 
+.subcat-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.subcat-label {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
 #subcatSelect {
   display: block;
   background: var(--bg-card);
@@ -214,7 +227,6 @@ main {
   font-size: 0.85rem;
   font-weight: 700;
   max-width: 260px;
-  margin-bottom: 0.6rem;
   cursor: pointer;
 }
 
@@ -313,7 +325,8 @@ main {
 .cart-modal[hidden],
 .lightbox-media .no-photo[hidden],
 .toast[hidden],
-.badge[hidden] {
+.badge[hidden],
+.subcat-row[hidden] {
   display: none !important;
 }
 

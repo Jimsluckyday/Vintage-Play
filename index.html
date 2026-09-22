@@ -97,7 +97,10 @@
   <main>
     <div class="filters" id="filters"></div>
     <div class="list-toolbar" id="listToolbar">
-      <select id="subcatSelect" hidden></select>
+      <div class="subcat-row" id="subcatRow" hidden>
+        <span class="subcat-label">Filter by:</span>
+        <select id="subcatSelect"></select>
+      </div>
       <input type="text" id="itemSearch" placeholder="Search titles..." />
       <div class="letter-bar" id="letterBar"></div>
     </div>
@@ -199,10 +202,11 @@
     }
 
     function renderSubcatSelect() {
+      const rowEl = document.getElementById("subcatRow");
       const selectEl = document.getElementById("subcatSelect");
       const brands = currentCategoryBrands();
       const usesDropdown = categoryUsesDropdown(activeCategory) && brands.length > 0;
-      selectEl.hidden = !usesDropdown;
+      rowEl.hidden = !usesDropdown;
       if (!usesDropdown) return;
 
       const sorted = [...brands].sort((a, b) => a.label.localeCompare(b.label));
@@ -234,7 +238,8 @@
       const categoryBrands = currentCategoryBrands();
       const dropdownStyle = categoryUsesDropdown(activeCategory);
 
-      // Top level ("All"): category tiles, unless a search/letter is active — then a global flat search.
+      // Top level ("All"): category tiles, unless a search is active — then a global flat search.
+      // (The letter bar itself is left off this top-level view on purpose — see below.)
       const showingCategoryTiles = activeCategory === "all" && !searching;
       // Within a category that has brands and uses the tile style: publisher tiles,
       // unless drilled in or searching. Dropdown-style categories skip this entirely —
@@ -254,7 +259,9 @@
       if (showingCategoryTiles) {
         renderNewArrivals();
         categoryGridEl.innerHTML = "";
-        renderLetterBar(allItems);
+        // No letter bar on the main landing page — category pills, search, and
+        // (once inside a category) the subcategory dropdown are enough on their own.
+        document.getElementById("letterBar").innerHTML = "";
         [...ALL_CATEGORIES].sort((a, b) => a.label.localeCompare(b.label)).forEach((cat) => {
           const count = allItems.filter((item) => item.category === cat.slug).length;
           const card = document.createElement("div");
