@@ -54,8 +54,8 @@
     </div>
 
     <div class="section">
-      <h2>Brands (Publisher / Sub-groups)</h2>
-      <p class="hint">Optional sub-grouping shown as cover-image tiles within a category (e.g. DC / Marvel / Image within Comics) — useful once a category has a lot of items.</p>
+      <h2>Subcategories</h2>
+      <p class="hint">Optional sub-grouping within a category — e.g. DC / Marvel / Image within Comics, or Sega Master System / NES / Arcade within Video Games. Shown as cover-photo tiles or a dropdown depending on that category's setting above.</p>
       <label for="brandCategory">Category this brand belongs to</label>
       <select id="brandCategory"></select>
       <label for="newBrandLabel">Brand Name</label>
@@ -76,7 +76,7 @@
       <select id="category"></select>
       <p class="hint">Don't see the category you need? Add one below, then it'll appear in this list.</p>
 
-      <label for="brand">Brand (optional)</label>
+      <label for="brand">Subcategory (optional)</label>
       <select id="brand">
         <option value="">None</option>
       </select>
@@ -291,11 +291,31 @@
         wrap.innerHTML = `
           ${cat.cover_photo_url ? `<img src="${cat.cover_photo_url}" alt="" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:2px solid var(--ink);display:block;margin:0 auto;" />` : `<div style="width:60px;height:60px;border-radius:6px;border:2px solid var(--ink);"></div>`}
           <div style="font-size:0.75rem;margin-top:0.25rem;">${escapeHtml(cat.label)}</div>
+          <div style="font-size:0.65rem;color:var(--ink-soft);">Subcategories shown as: ${cat.subcat_display === "dropdown" ? "Dropdown" : "Tiles"}</div>
           <button type="button" class="btn secondary" data-edit-cat-photo="${cat.slug}" style="margin-top:0.25rem;padding:0.2rem 0.5rem;font-size:0.7rem;">${cat.cover_photo_url ? "Change Photo" : "Add Photo"}</button>
           <button type="button" class="btn secondary" data-rename-cat="${cat.slug}" style="margin-top:0.25rem;padding:0.2rem 0.5rem;font-size:0.7rem;">Rename</button>
+          <button type="button" class="btn secondary" data-toggle-subcat-display="${cat.slug}" style="margin-top:0.25rem;padding:0.2rem 0.5rem;font-size:0.7rem;">Switch to ${cat.subcat_display === "dropdown" ? "Tiles" : "Dropdown"}</button>
           <input type="file" accept="image/*" data-cat-photo-input="${cat.slug}" hidden />
         `;
         managerEl.appendChild(wrap);
+      });
+      managerEl.querySelectorAll("[data-toggle-subcat-display]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const slug = btn.dataset.toggleSubcatDisplay;
+          const current = ALL_CATEGORIES.find((c) => c.slug === slug);
+          const next = current?.subcat_display === "dropdown" ? "tiles" : "dropdown";
+          const errorEl = document.getElementById("categoryError");
+          errorEl.hidden = true;
+          try {
+            const { error } = await supabaseClient.from("categories").update({ subcat_display: next }).eq("slug", slug);
+            if (error) throw error;
+            await loadCategories();
+            renderCategoryManager();
+          } catch (err) {
+            errorEl.textContent = err.message;
+            errorEl.hidden = false;
+          }
+        });
       });
       managerEl.querySelectorAll("[data-edit-cat-photo]").forEach((btn) => {
         const slug = btn.dataset.editCatPhoto;

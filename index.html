@@ -97,6 +97,7 @@
   <main>
     <div class="filters" id="filters"></div>
     <div class="list-toolbar" id="listToolbar">
+      <select id="subcatSelect" hidden></select>
       <input type="text" id="itemSearch" placeholder="Search titles..." />
       <div class="letter-bar" id="letterBar"></div>
     </div>
@@ -186,6 +187,37 @@
       return brandsForCategory(activeCategory);
     }
 
+    // Categories with a lot of potential subcategories (e.g. Video Games:
+    // Sega Master System, NES, Arcade...) use a dropdown next to the search box
+    // instead of a tile-per-subcategory page — one click fewer, and it never
+    // gets visually bigger no matter how many subcategories get added later.
+    // Categories left on "tiles" (the default, e.g. Comics/Books) keep the
+    // existing cover-photo tile drill-down.
+    function categoryUsesDropdown(slug) {
+      const cat = ALL_CATEGORIES.find((c) => c.slug === slug);
+      return cat?.subcat_display === "dropdown";
+    }
+
+    function renderSubcatSelect() {
+      const selectEl = document.getElementById("subcatSelect");
+      const brands = currentCategoryBrands();
+      const usesDropdown = categoryUsesDropdown(activeCategory) && brands.length > 0;
+      selectEl.hidden = !usesDropdown;
+      if (!usesDropdown) return;
+
+      const sorted = [...brands].sort((a, b) => a.label.localeCompare(b.label));
+      selectEl.innerHTML =
+        `<option value="">All ${escapeHtml(categoryLabel(activeCategory))}</option>` +
+        sorted.map((b) => `<option value="${b.slug}">${escapeHtml(b.label)}</option>`).join("") +
+        `<option value="__none__">Other / Uncategorized</option>`;
+      selectEl.value = activeBrand || "";
+    }
+
+    document.getElementById("subcatSelect").addEventListener("change", (e) => {
+      activeBrand = e.target.value || null;
+      renderGrid();
+    });
+
     function sortByTitle(items) {
       return [...items].sort((a, b) => a.title.localeCompare(b.title));
     }
@@ -200,20 +232,24 @@
 
       const searching = !!(searchTerm.trim() || activeLetter);
       const categoryBrands = currentCategoryBrands();
+      const dropdownStyle = categoryUsesDropdown(activeCategory);
 
       // Top level ("All"): category tiles, unless a search/letter is active — then a global flat search.
       const showingCategoryTiles = activeCategory === "all" && !searching;
-      // Within a category that has brands: publisher tiles, unless drilled in or searching.
-      const showingBrandTiles = activeCategory !== "all" && categoryBrands.length > 0 && !activeBrand && !searching;
+      // Within a category that has brands and uses the tile style: publisher tiles,
+      // unless drilled in or searching. Dropdown-style categories skip this entirely —
+      // the subcategory select (rendered below) narrows the flat list directly instead.
+      const showingBrandTiles = activeCategory !== "all" && !dropdownStyle && categoryBrands.length > 0 && !activeBrand && !searching;
       const showingFlatList = !showingCategoryTiles && !showingBrandTiles;
 
       categoryGridEl.hidden = !showingCategoryTiles;
       brandGridEl.hidden = !showingBrandTiles;
       gridEl.hidden = !showingFlatList;
       listEl.hidden = !showingFlatList;
-      backBtn.hidden = !(activeCategory !== "all" && categoryBrands.length > 0 && (activeBrand || searching));
+      backBtn.hidden = !(activeCategory !== "all" && !dropdownStyle && categoryBrands.length > 0 && (activeBrand || searching));
       emptyNote.hidden = true;
       document.getElementById("newArrivalsSection").hidden = true;
+      renderSubcatSelect();
 
       if (showingCategoryTiles) {
         renderNewArrivals();

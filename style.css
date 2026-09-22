@@ -204,6 +204,20 @@ main {
   margin-bottom: 0.6rem;
 }
 
+#subcatSelect {
+  display: block;
+  background: var(--bg-card);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 0.4rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  max-width: 260px;
+  margin-bottom: 0.6rem;
+  cursor: pointer;
+}
+
 .letter-bar {
   display: flex;
   flex-wrap: wrap;
