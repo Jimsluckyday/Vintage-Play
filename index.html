@@ -96,6 +96,10 @@
 
   <main>
     <div class="filters" id="filters"></div>
+    <div class="subcat-row" id="globalSubcatRow" hidden>
+      <span class="subcat-label">Jump to:</span>
+      <select id="globalSubcatSelect"></select>
+    </div>
     <div class="list-toolbar" id="listToolbar">
       <div class="subcat-row" id="subcatRow" hidden>
         <span class="subcat-label">Filter by:</span>
@@ -222,6 +226,53 @@
       renderGrid();
     });
 
+    // Lets someone who already knows what they want (e.g. "Sega Master System")
+    // jump straight there from the main landing page, instead of having to click
+    // into Video Games first and find the per-category dropdown. Every subcategory
+    // across every category shows up here, grouped by category, regardless of
+    // whether that category itself uses the tile or dropdown style.
+    function renderGlobalSubcatSelect() {
+      const rowEl = document.getElementById("globalSubcatRow");
+      const selectEl = document.getElementById("globalSubcatSelect");
+      const onLanding = activeCategory === "all" && !(searchTerm.trim() || activeLetter);
+      const show = onLanding && ALL_BRANDS.length > 0;
+      rowEl.hidden = !show;
+      if (!show) return;
+
+      const byCategory = {};
+      ALL_BRANDS.forEach((b) => {
+        (byCategory[b.category] = byCategory[b.category] || []).push(b);
+      });
+      const categorySlugs = Object.keys(byCategory).sort((a, b) =>
+        categoryLabel(a).localeCompare(categoryLabel(b))
+      );
+
+      selectEl.innerHTML =
+        `<option value="">Jump to a subcategory&hellip;</option>` +
+        categorySlugs
+          .map((slug) => {
+            const opts = [...byCategory[slug]]
+              .sort((a, b) => a.label.localeCompare(b.label))
+              .map((b) => `<option value="${slug}::${b.slug}">${escapeHtml(b.label)}</option>`)
+              .join("");
+            return `<optgroup label="${escapeHtml(categoryLabel(slug))}">${opts}</optgroup>`;
+          })
+          .join("");
+      selectEl.value = "";
+    }
+
+    document.getElementById("globalSubcatSelect").addEventListener("change", (e) => {
+      if (!e.target.value) return;
+      const [cat, brand] = e.target.value.split("::");
+      activeCategory = cat;
+      activeBrand = brand;
+      searchTerm = "";
+      activeLetter = null;
+      document.getElementById("itemSearch").value = "";
+      renderFilters();
+      renderGrid();
+    });
+
     function sortByTitle(items) {
       return [...items].sort((a, b) => a.title.localeCompare(b.title));
     }
@@ -255,12 +306,14 @@
       emptyNote.hidden = true;
       document.getElementById("newArrivalsSection").hidden = true;
       renderSubcatSelect();
+      renderGlobalSubcatSelect();
 
       if (showingCategoryTiles) {
         renderNewArrivals();
         categoryGridEl.innerHTML = "";
-        // No letter bar on the main landing page — category pills, search, and
-        // (once inside a category) the subcategory dropdown are enough on their own.
+        // No letter bar on the main landing page — category pills, search, the
+        // "Jump to" subcategory dropdown, and (once inside a category) the
+        // per-category dropdown are enough on their own.
         document.getElementById("letterBar").innerHTML = "";
         [...ALL_CATEGORIES].sort((a, b) => a.label.localeCompare(b.label)).forEach((cat) => {
           const count = allItems.filter((item) => item.category === cat.slug).length;
