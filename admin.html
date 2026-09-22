@@ -703,12 +703,21 @@
       const managerEl = document.getElementById("photoManager");
       managerEl.innerHTML = "";
       editingPhotoUrls.forEach((url, index) => {
+        const isFirst = index === 0;
+        const isLast = index === editingPhotoUrls.length - 1;
         const wrap = document.createElement("div");
         wrap.style.position = "relative";
         wrap.innerHTML = `
           <img src="${url}" alt="" style="width:70px;height:70px;object-fit:cover;border-radius:6px;display:block;" />
+          ${isFirst ? `<span style="position:absolute;bottom:2px;left:2px;background:var(--mustard);color:var(--ink);font-size:0.6rem;font-weight:800;padding:0.05rem 0.3rem;border-radius:4px;">COVER</span>` : ""}
           <button type="button" data-remove-index="${index}" title="Remove photo"
             style="position:absolute;top:-6px;right:-6px;background:#7a2e2e;color:#fff;border:none;border-radius:50%;width:20px;height:20px;line-height:1;cursor:pointer;">&times;</button>
+          <div style="display:flex;justify-content:center;gap:0.2rem;margin-top:0.2rem;">
+            <button type="button" data-move-index="${index}" data-direction="-1" title="Move left" ${isFirst ? "disabled" : ""}
+              style="padding:0.05rem 0.4rem;font-size:0.7rem;cursor:pointer;">&larr;</button>
+            <button type="button" data-move-index="${index}" data-direction="1" title="Move right" ${isLast ? "disabled" : ""}
+              style="padding:0.05rem 0.4rem;font-size:0.7rem;cursor:pointer;">&rarr;</button>
+          </div>
         `;
         managerEl.appendChild(wrap);
       });
@@ -718,8 +727,17 @@
           renderPhotoManager();
         })
       );
+      managerEl.querySelectorAll("[data-move-index]").forEach((btn) =>
+        btn.addEventListener("click", () => {
+          const index = Number(btn.dataset.moveIndex);
+          const target = index + Number(btn.dataset.direction);
+          if (target < 0 || target >= editingPhotoUrls.length) return;
+          [editingPhotoUrls[index], editingPhotoUrls[target]] = [editingPhotoUrls[target], editingPhotoUrls[index]];
+          renderPhotoManager();
+        })
+      );
       document.getElementById("existingPhotosNote").textContent = editingPhotoUrls.length
-        ? ""
+        ? "The first photo (marked COVER) is what shows on the catalog card — use the arrows to reorder. Don't forget to hit Save Item after reordering."
         : "No photos yet.";
     }
 
