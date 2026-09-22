@@ -56,13 +56,15 @@
     <div class="section">
       <h2>Subcategories</h2>
       <p class="hint">Optional sub-grouping within a category — e.g. DC / Marvel / Image within Comics, or Sega Master System / NES / Arcade within Video Games. Shown as cover-photo tiles or a dropdown depending on that category's setting above.</p>
-      <label for="brandCategory">Category this brand belongs to</label>
+      <label for="brandCategory">Category this belongs to</label>
       <select id="brandCategory"></select>
-      <label for="newBrandLabel">Brand Name</label>
-      <input type="text" id="newBrandLabel" placeholder="e.g. DC" />
+      <label for="newBrandGroup">Group (optional — e.g. "Sega" or "Nintendo" so Genesis/32X/Saturn or NES/SNES/N64 can collapse under one heading instead of listing dozens of platforms at once)</label>
+      <input type="text" id="newBrandGroup" placeholder="Leave blank if this one doesn't need grouping" />
+      <label for="newBrandLabel">Subcategory Name</label>
+      <input type="text" id="newBrandLabel" placeholder="e.g. DC, or Genesis" />
       <label for="newBrandPhoto">Cover Photo</label>
       <input type="file" id="newBrandPhoto" accept="image/*" />
-      <button class="btn secondary" id="addBrandBtn">Add Brand</button>
+      <button class="btn secondary" id="addBrandBtn">Add Subcategory</button>
       <p class="error-text" id="brandError" hidden></p>
       <div class="btn-row" id="brandManager" style="margin-top:0.75rem;"></div>
     </div>
@@ -189,9 +191,23 @@
       const previousValue = select.value;
       const category = document.getElementById("category").value;
       const matching = brandsForCategory(category);
+      const grouped = matching.filter((b) => b.group_label);
+      const flat = matching.filter((b) => !b.group_label);
+      const groups = [...new Set(grouped.map((b) => b.group_label))].sort();
       select.innerHTML =
         `<option value="">None</option>` +
-        matching.map((b) => `<option value="${b.slug}">${b.label}</option>`).join("");
+        flat.map((b) => `<option value="${b.slug}">${escapeHtml(b.label)}</option>`).join("") +
+        groups
+          .map(
+            (g) =>
+              `<optgroup label="${escapeHtml(g)}">` +
+              grouped
+                .filter((b) => b.group_label === g)
+                .map((b) => `<option value="${b.slug}">${escapeHtml(b.label)}</option>`)
+                .join("") +
+              `</optgroup>`
+          )
+          .join("");
       if (previousValue) select.value = previousValue;
     }
 
@@ -203,10 +219,11 @@
         wrap.style.textAlign = "center";
         wrap.innerHTML = `
           ${brand.cover_photo_url ? `<img src="${brand.cover_photo_url}" alt="" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:2px solid var(--ink);display:block;margin:0 auto;" />` : `<div style="width:60px;height:60px;border-radius:6px;border:2px solid var(--ink);"></div>`}
-          <div style="font-size:0.75rem;margin-top:0.25rem;">${escapeHtml(brand.label)}</div>
+          <div style="font-size:0.75rem;margin-top:0.25rem;">${brand.group_label ? `${escapeHtml(brand.group_label)} &rsaquo; ` : ""}${escapeHtml(brand.label)}</div>
           <div style="font-size:0.65rem;color:var(--ink-soft);">${categoryLabel(brand.category)}</div>
           <div class="btn-row" style="justify-content:center;margin-top:0.25rem;">
             <button type="button" class="btn secondary" data-edit-photo="${brand.slug}" style="margin-top:0;padding:0.2rem 0.5rem;font-size:0.7rem;">${brand.cover_photo_url ? "Change Photo" : "Add Photo"}</button>
+            <button type="button" class="btn secondary" data-edit-group="${brand.slug}" style="margin-top:0;padding:0.2rem 0.5rem;font-size:0.7rem;">${brand.group_label ? "Change Group" : "Add Group"}</button>
             <button type="button" class="btn danger" data-remove-brand="${brand.slug}" style="margin-top:0;padding:0.2rem 0.5rem;font-size:0.7rem;">Delete</button>
           </div>
           <input type="file" accept="image/*" data-photo-input="${brand.slug}" hidden />
@@ -215,13 +232,39 @@
       });
       managerEl.querySelectorAll("[data-remove-brand]").forEach((btn) =>
         btn.addEventListener("click", async () => {
-          if (!confirm(`Delete brand "${btn.dataset.removeBrand}"? Items using it keep their brand value but it won't show as a tile anymore.`)) return;
+          if (!confirm(`Delete "${btn.dataset.removeBrand}"? Items using it keep their subcategory value but it won't show as a tile/option anymore.`)) return;
           await supabaseClient.from("brands").delete().eq("slug", btn.dataset.removeBrand);
           await loadBrands();
           renderBrandManager();
           populateBrandSelect();
         })
       );
+      managerEl.querySelectorAll("[data-edit-group]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const slug = btn.dataset.editGroup;
+          const current = ALL_BRANDS.find((b) => b.slug === slug);
+          const newGroup = prompt(
+            `Group for "${current?.label}" (e.g. "Sega" or "Nintendo") — leave blank to remove grouping:`,
+            current?.group_label || ""
+          );
+          if (newGroup === null) return;
+          const errorEl = document.getElementById("brandError");
+          errorEl.hidden = true;
+          try {
+            const { error } = await supabaseClient
+              .from("brands")
+              .update({ group_label: newGroup.trim() || null })
+              .eq("slug", slug);
+            if (error) throw error;
+            await loadBrands();
+            renderBrandManager();
+            populateBrandSelect();
+          } catch (err) {
+            errorEl.textContent = err.message;
+            errorEl.hidden = false;
+          }
+        });
+      });
       managerEl.querySelectorAll("[data-edit-photo]").forEach((btn) => {
         const slug = btn.dataset.editPhoto;
         const fileInput = managerEl.querySelector(`[data-photo-input="${slug}"]`);
@@ -250,10 +293,11 @@
 
       const label = document.getElementById("newBrandLabel").value.trim();
       const category = document.getElementById("brandCategory").value;
+      const group_label = document.getElementById("newBrandGroup").value.trim() || null;
       const fileInput = document.getElementById("newBrandPhoto");
 
       if (!label) {
-        errorEl.textContent = "Brand name is required.";
+        errorEl.textContent = "Subcategory name is required.";
         errorEl.hidden = false;
         return;
       }
@@ -266,10 +310,11 @@
         }
         const { error } = await supabaseClient
           .from("brands")
-          .insert({ slug: slugify(label), label, category, cover_photo_url });
+          .insert({ slug: slugify(label), label, category, group_label, cover_photo_url });
         if (error) throw error;
 
         document.getElementById("newBrandLabel").value = "";
+        document.getElementById("newBrandGroup").value = "";
         fileInput.value = "";
         await loadBrands();
         renderBrandManager();

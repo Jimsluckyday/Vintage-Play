@@ -96,14 +96,20 @@
 
   <main>
     <div class="filters" id="filters"></div>
-    <div class="subcat-row" id="globalSubcatRow" hidden>
-      <span class="subcat-label">Jump to:</span>
-      <select id="globalSubcatSelect"></select>
+    <div class="subcat-picker" id="globalSubcatPicker" hidden>
+      <button type="button" class="subcat-picker-toggle" id="globalSubcatToggle">Jump to a subcategory &#9662;</button>
+      <div class="subcat-picker-panel" id="globalSubcatPanel" hidden>
+        <input type="text" class="subcat-picker-search" id="globalSubcatSearch" placeholder="Search subcategories..." />
+        <div class="subcat-picker-body" id="globalSubcatBody"></div>
+      </div>
     </div>
     <div class="list-toolbar" id="listToolbar">
-      <div class="subcat-row" id="subcatRow" hidden>
-        <span class="subcat-label">Filter by:</span>
-        <select id="subcatSelect"></select>
+      <div class="subcat-picker" id="subcatPicker" hidden>
+        <button type="button" class="subcat-picker-toggle" id="subcatToggle"></button>
+        <div class="subcat-picker-panel" id="subcatPanel" hidden>
+          <input type="text" class="subcat-picker-search" id="subcatSearch" placeholder="Search..." />
+          <div class="subcat-picker-body" id="subcatBody"></div>
+        </div>
       </div>
       <input type="text" id="itemSearch" placeholder="Search titles..." />
       <div class="letter-bar" id="letterBar"></div>
@@ -205,38 +211,143 @@
       return cat?.subcat_display === "dropdown";
     }
 
-    function renderSubcatSelect() {
-      const rowEl = document.getElementById("subcatRow");
-      const selectEl = document.getElementById("subcatSelect");
-      const brands = currentCategoryBrands();
-      const usesDropdown = categoryUsesDropdown(activeCategory) && brands.length > 0;
-      rowEl.hidden = !usesDropdown;
-      if (!usesDropdown) return;
+    // Renders one subcategory-picker panel's contents: brands with a group_label
+    // (e.g. "Sega") collapse under a <details> so dozens of platforms don't all
+    // show at once — click the group to expand it. Ungrouped brands (e.g. DC,
+    // Marvel, Image) show as plain buttons since there's nothing to nest them under.
+    // `onPick(brand)` fires when a button is clicked; `sectionLabel` is an optional
+    // heading shown above this group of brands (used by the global panel to
+    // separate categories).
+    function buildBrandPickerSectionHtml(brands, sectionLabel) {
+      const grouped = brands.filter((b) => b.group_label);
+      const flat = brands.filter((b) => !b.group_label);
+      const groupNames = [...new Set(grouped.map((b) => b.group_label))].sort((a, b) => a.localeCompare(b));
 
-      const sorted = [...brands].sort((a, b) => a.label.localeCompare(b.label));
-      selectEl.innerHTML =
-        `<option value="">All ${escapeHtml(categoryLabel(activeCategory))}</option>` +
-        sorted.map((b) => `<option value="${b.slug}">${escapeHtml(b.label)}</option>`).join("") +
-        `<option value="__none__">Other / Uncategorized</option>`;
-      selectEl.value = activeBrand || "";
+      const flatHtml = [...flat]
+        .sort((a, b) => a.label.localeCompare(b.label))
+        .map(
+          (b) =>
+            `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="${b.slug}">${escapeHtml(b.label)}</button>`
+        )
+        .join("");
+
+      const groupsHtml = groupNames
+        .map((g) => {
+          const items = grouped
+            .filter((b) => b.group_label === g)
+            .sort((a, b) => a.label.localeCompare(b.label))
+            .map(
+              (b) =>
+                `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="${b.slug}">${escapeHtml(b.label)}</button>`
+            )
+            .join("");
+          return `
+            <details class="subcat-picker-group">
+              <summary data-searchable>${escapeHtml(g)}</summary>
+              <div class="subcat-picker-group-items">${items}</div>
+            </details>
+          `;
+        })
+        .join("");
+
+      const heading = sectionLabel ? `<div class="subcat-picker-section-label">${escapeHtml(sectionLabel)}</div>` : "";
+      return `<div class="subcat-picker-section">${heading}${flatHtml}${groupsHtml}</div>`;
     }
 
-    document.getElementById("subcatSelect").addEventListener("change", (e) => {
-      activeBrand = e.target.value || null;
-      renderGrid();
+    // Typing in a panel's search box hides non-matching buttons/groups and
+    // auto-expands any group that still has a visible match inside it.
+    function wireSubcatPickerSearch(searchInputEl, bodyEl) {
+      searchInputEl.addEventListener("input", () => {
+        const term = searchInputEl.value.trim().toLowerCase();
+        bodyEl.querySelectorAll(".subcat-picker-item").forEach((btn) => {
+          btn.hidden = !(!term || btn.textContent.toLowerCase().includes(term));
+        });
+        bodyEl.querySelectorAll("details.subcat-picker-group").forEach((details) => {
+          const hasVisibleItem = [...details.querySelectorAll(".subcat-picker-item")].some((b) => !b.hidden);
+          const groupNameMatches = details.querySelector("summary").textContent.toLowerCase().includes(term);
+          details.hidden = !(!term || hasVisibleItem || groupNameMatches);
+          if (term && hasVisibleItem) details.open = true;
+          if (!term) details.open = false;
+        });
+        bodyEl.querySelectorAll(".subcat-picker-section").forEach((section) => {
+          const anyVisible = [...section.querySelectorAll(".subcat-picker-item")].some((b) => !b.hidden);
+          const anyGroupVisible = [...section.querySelectorAll("details.subcat-picker-group")].some((d) => !d.hidden);
+          section.hidden = !(!term || anyVisible || anyGroupVisible);
+        });
+      });
+    }
+
+    // Wires up a picker's open/close toggle button, outside-click-to-close, and
+    // delegates brand-button clicks to onPick. Shared by both the in-category
+    // and the main-page "jump to" pickers.
+    function wireSubcatPicker({ pickerId, toggleId, panelId, searchId, bodyId, onPick }) {
+      const pickerEl = document.getElementById(pickerId);
+      const toggleEl = document.getElementById(toggleId);
+      const panelEl = document.getElementById(panelId);
+      const bodyEl = document.getElementById(bodyId);
+      const searchEl = document.getElementById(searchId);
+
+      toggleEl.addEventListener("click", () => {
+        panelEl.hidden = !panelEl.hidden;
+        if (!panelEl.hidden) searchEl.value = "";
+      });
+      document.addEventListener("click", (e) => {
+        if (!pickerEl.contains(e.target)) panelEl.hidden = true;
+      });
+      bodyEl.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-brand-slug]");
+        if (!btn) return;
+        onPick(btn.dataset.brandSlug, btn.closest("[data-category-slug]")?.dataset.categorySlug);
+        panelEl.hidden = true;
+      });
+      wireSubcatPickerSearch(searchEl, bodyEl);
+    }
+
+    function renderSubcatPicker() {
+      const pickerEl = document.getElementById("subcatPicker");
+      const toggleEl = document.getElementById("subcatToggle");
+      const bodyEl = document.getElementById("subcatBody");
+      const brands = currentCategoryBrands();
+      const usesDropdown = categoryUsesDropdown(activeCategory) && brands.length > 0;
+      pickerEl.hidden = !usesDropdown;
+      if (!usesDropdown) return;
+
+      const currentLabel = activeBrand
+        ? activeBrand === "__none__"
+          ? "Other / Uncategorized"
+          : brands.find((b) => b.slug === activeBrand)?.label || "Filter by subcategory"
+        : `All ${categoryLabel(activeCategory)}`;
+      toggleEl.textContent = `${currentLabel} ▾`;
+
+      const allBtn = `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="">All ${escapeHtml(categoryLabel(activeCategory))}</button>`;
+      const otherBtn = `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="__none__">Other / Uncategorized</button>`;
+      bodyEl.innerHTML = allBtn + buildBrandPickerSectionHtml(brands, null) + otherBtn;
+    }
+
+    wireSubcatPicker({
+      pickerId: "subcatPicker",
+      toggleId: "subcatToggle",
+      panelId: "subcatPanel",
+      searchId: "subcatSearch",
+      bodyId: "subcatBody",
+      onPick: (brandSlug) => {
+        activeBrand = brandSlug || null;
+        renderGrid();
+      },
     });
 
     // Lets someone who already knows what they want (e.g. "Sega Master System")
     // jump straight there from the main landing page, instead of having to click
-    // into Video Games first and find the per-category dropdown. Every subcategory
-    // across every category shows up here, grouped by category, regardless of
-    // whether that category itself uses the tile or dropdown style.
-    function renderGlobalSubcatSelect() {
-      const rowEl = document.getElementById("globalSubcatRow");
-      const selectEl = document.getElementById("globalSubcatSelect");
+    // into Video Games first and find the per-category picker. Every subcategory
+    // across every category shows up here, grouped by category and then (where
+    // set) by group_label, regardless of whether that category itself uses the
+    // tile or dropdown style.
+    function renderGlobalSubcatPicker() {
+      const pickerEl = document.getElementById("globalSubcatPicker");
+      const bodyEl = document.getElementById("globalSubcatBody");
       const onLanding = activeCategory === "all" && !(searchTerm.trim() || activeLetter);
       const show = onLanding && ALL_BRANDS.length > 0;
-      rowEl.hidden = !show;
+      pickerEl.hidden = !show;
       if (!show) return;
 
       const byCategory = {};
@@ -247,30 +358,29 @@
         categoryLabel(a).localeCompare(categoryLabel(b))
       );
 
-      selectEl.innerHTML =
-        `<option value="">Jump to a subcategory&hellip;</option>` +
-        categorySlugs
-          .map((slug) => {
-            const opts = [...byCategory[slug]]
-              .sort((a, b) => a.label.localeCompare(b.label))
-              .map((b) => `<option value="${slug}::${b.slug}">${escapeHtml(b.label)}</option>`)
-              .join("");
-            return `<optgroup label="${escapeHtml(categoryLabel(slug))}">${opts}</optgroup>`;
-          })
-          .join("");
-      selectEl.value = "";
+      bodyEl.innerHTML = categorySlugs
+        .map((slug) => {
+          const section = buildBrandPickerSectionHtml(byCategory[slug], categoryLabel(slug));
+          return section.replace('class="subcat-picker-section"', `class="subcat-picker-section" data-category-slug="${slug}"`);
+        })
+        .join("");
     }
 
-    document.getElementById("globalSubcatSelect").addEventListener("change", (e) => {
-      if (!e.target.value) return;
-      const [cat, brand] = e.target.value.split("::");
-      activeCategory = cat;
-      activeBrand = brand;
-      searchTerm = "";
-      activeLetter = null;
-      document.getElementById("itemSearch").value = "";
-      renderFilters();
-      renderGrid();
+    wireSubcatPicker({
+      pickerId: "globalSubcatPicker",
+      toggleId: "globalSubcatToggle",
+      panelId: "globalSubcatPanel",
+      searchId: "globalSubcatSearch",
+      bodyId: "globalSubcatBody",
+      onPick: (brandSlug, categorySlug) => {
+        activeCategory = categorySlug;
+        activeBrand = brandSlug;
+        searchTerm = "";
+        activeLetter = null;
+        document.getElementById("itemSearch").value = "";
+        renderFilters();
+        renderGrid();
+      },
     });
 
     function sortByTitle(items) {
@@ -305,8 +415,8 @@
       backBtn.hidden = !(activeCategory !== "all" && !dropdownStyle && categoryBrands.length > 0 && (activeBrand || searching));
       emptyNote.hidden = true;
       document.getElementById("newArrivalsSection").hidden = true;
-      renderSubcatSelect();
-      renderGlobalSubcatSelect();
+      renderSubcatPicker();
+      renderGlobalSubcatPicker();
 
       if (showingCategoryTiles) {
         renderNewArrivals();
