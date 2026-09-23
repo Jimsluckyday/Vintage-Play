@@ -546,12 +546,14 @@
           ${item.highlight_note ? `<span class="badge badge-highlight" style="align-self:flex-start;">${escapeHtml(item.highlight_note)}</span>` : ""}
           ${item.promo_at ? `<span class="badge badge-sale" style="align-self:flex-start;">SALE</span>` : ""}
           <h3>${escapeHtml(item.title)}</h3>
-          <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
-          <span class="status ${item.status}">${item.status === "available" ? "" : item.status.toUpperCase()}</span>
-          ${item.quantity > 1 ? `<span class="qty-note">${item.quantity} in stock</span>` : ""}
-          <div class="btn-row" style="margin-top:0.4rem;">
-            <button type="button" class="btn secondary" data-add-cart="${item.id}" style="padding:0.35rem 0.7rem;font-size:0.8rem;">Add to Cart</button>
-            <button type="button" class="btn-link" data-details="${item.id}">Details</button>
+          <div class="card-bottom">
+            <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
+            <span class="status ${item.status}">${item.status === "available" ? "" : item.status.toUpperCase()}</span>
+            ${item.quantity > 1 ? `<span class="qty-note">${item.quantity} in stock</span>` : ""}
+            <div class="btn-row">
+              <button type="button" class="btn secondary" data-add-cart="${item.id}" style="padding:0.35rem 0.7rem;font-size:0.8rem;">Add to Cart</button>
+              <button type="button" class="btn-link" data-details="${item.id}">Details</button>
+            </div>
           </div>
         </div>
       `;
