@@ -652,6 +652,12 @@
               <button class="btn secondary" data-action="toggle-featured" data-id="${item.id}">${item.featured_at ? "Unfeature" : "Feature as New"}</button>
               <button class="btn secondary" data-action="toggle-promo" data-id="${item.id}">${item.promo_at ? "Remove from Sale" : "Mark on Sale"}</button>
             </div>
+            <div class="btn-row">
+              <span class="meta" style="align-self:center;">Post to:</span>
+              <button class="btn secondary" data-action="post-ebay" data-id="${item.id}">eBay</button>
+              <button class="btn secondary" data-action="post-kijiji" data-id="${item.id}">Kijiji</button>
+              <button class="btn secondary" data-action="post-fb" data-id="${item.id}">FB Marketplace</button>
+            </div>
             <div class="listing-output" data-listing-for="${item.id}" hidden></div>
           </div>
         `;
@@ -676,6 +682,31 @@
       listEl.querySelectorAll('[data-action="toggle-promo"]').forEach((btn) =>
         btn.addEventListener("click", () => toggleFlag(btn.dataset.id, "promo_at"))
       );
+      listEl.querySelectorAll('[data-action="post-ebay"]').forEach((btn) =>
+        btn.addEventListener("click", () => copyListingAndOpen(btn.dataset.id, "https://www.ebay.com/sl/sell"))
+      );
+      listEl.querySelectorAll('[data-action="post-kijiji"]').forEach((btn) =>
+        btn.addEventListener("click", () => copyListingAndOpen(btn.dataset.id, "https://www.kijiji.ca/p-post-ad.html"))
+      );
+      listEl.querySelectorAll('[data-action="post-fb"]').forEach((btn) =>
+        btn.addEventListener("click", () => copyListingAndOpen(btn.dataset.id, "https://www.facebook.com/marketplace/create/item"))
+      );
+    }
+
+    // Copies the same listing text "Generate Listing Text" produces to the
+    // clipboard, then opens that marketplace's new-listing page in a new tab —
+    // paste into the description field, then fill in title/price/photos by hand
+    // (none of these sites offer a way to pre-fill their forms from outside).
+    async function copyListingAndOpen(id, url) {
+      const item = items.find((i) => i.id === id);
+      if (!item) return;
+      try {
+        await navigator.clipboard.writeText(buildListingText(item));
+        alert("Listing text copied to your clipboard. Paste it into the page that just opened.");
+      } catch (err) {
+        alert("Couldn't copy to clipboard automatically — use \"Generate Listing Text\" above to copy it manually.");
+      }
+      window.open(url, "_blank");
     }
 
     async function toggleFlag(id, column) {
