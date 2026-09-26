@@ -950,7 +950,11 @@
       variantsEl.innerHTML = sorted
         .map((v) => {
           const conditionText = conditionTagLabel(v) || "Condition not specified";
-          const notesHtml = v.condition_notes ? `<p class="lb-condition-notes">${escapeHtml(v.condition_notes)}</p>` : "";
+          // Always render a notes line, even when blank — a variant with no
+          // issues needs to say so explicitly, or it reads as ambiguous next
+          // to a sibling row whose issue IS spelled out (the whole point of
+          // this view is making the difference between rows unmistakable).
+          const notesHtml = `<p class="lb-condition-notes">${escapeHtml(v.condition_notes || "No notable condition issues.")}</p>`;
           const actionHtml =
             v.status === "available"
               ? `<button type="button" class="btn secondary" data-add-cart="${v.id}">Add to Cart</button>`

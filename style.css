@@ -773,6 +773,13 @@ main {
 .lb-variant-row .lb-condition-notes {
   margin: 0;
   width: 100%;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.lb-variant-row .tag-condition {
+  font-size: 0.9rem;
 }
 
 .lb-variant-row .price {
