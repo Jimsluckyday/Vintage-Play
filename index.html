@@ -357,32 +357,29 @@
     // `onPick(brand)` fires when a button is clicked; `sectionLabel` is an optional
     // heading shown above this group of brands (used by the global panel to
     // separate categories).
-    function buildBrandPickerSectionHtml(brands, sectionLabel) {
+    // `categorySlug` is needed (not just read from the brand, though brands do
+    // carry their own .category) so this stays correct even when called from
+    // the global picker, which passes one category's brands at a time already
+    // scoped by the caller's own loop variable.
+    function buildBrandPickerSectionHtml(brands, sectionLabel, categorySlug) {
+      const countFor = (b) => allItems.filter((i) => i.category === categorySlug && i.brand === b.slug).length;
+      const leafHtml = (b) =>
+        `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="${b.slug}">${escapeHtml(b.label)} <span class="subcat-picker-count">(${countFor(b)})</span></button>`;
+
       const grouped = brands.filter((b) => b.group_label);
       const flat = brands.filter((b) => !b.group_label);
       const groupNames = [...new Set(grouped.map((b) => b.group_label))].sort((a, b) => a.localeCompare(b));
 
-      const flatHtml = [...flat]
-        .sort((a, b) => a.label.localeCompare(b.label))
-        .map(
-          (b) =>
-            `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="${b.slug}">${escapeHtml(b.label)}</button>`
-        )
-        .join("");
+      const flatHtml = [...flat].sort((a, b) => a.label.localeCompare(b.label)).map(leafHtml).join("");
 
       const groupsHtml = groupNames
         .map((g) => {
-          const items = grouped
-            .filter((b) => b.group_label === g)
-            .sort((a, b) => a.label.localeCompare(b.label))
-            .map(
-              (b) =>
-                `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="${b.slug}">${escapeHtml(b.label)}</button>`
-            )
-            .join("");
+          const members = grouped.filter((b) => b.group_label === g);
+          const groupCount = members.reduce((sum, b) => sum + countFor(b), 0);
+          const items = [...members].sort((a, b) => a.label.localeCompare(b.label)).map(leafHtml).join("");
           return `
             <details class="subcat-picker-group">
-              <summary data-searchable>${escapeHtml(g)}</summary>
+              <summary data-searchable>${escapeHtml(g)} <span class="subcat-picker-count">(${groupCount})</span></summary>
               <div class="subcat-picker-group-items">${items}</div>
             </details>
           `;
@@ -458,9 +455,11 @@
         : `All ${categoryLabel(activeCategory)}`;
       toggleEl.textContent = `${currentLabel} ▾`;
 
-      const allBtn = `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="">All ${escapeHtml(categoryLabel(activeCategory))}</button>`;
-      const otherBtn = `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="__none__">Other / Uncategorized</button>`;
-      bodyEl.innerHTML = allBtn + buildBrandPickerSectionHtml(brands, null) + otherBtn;
+      const totalCount = allItems.filter((i) => i.category === activeCategory).length;
+      const otherCount = allItems.filter((i) => i.category === activeCategory && !i.brand).length;
+      const allBtn = `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="">All ${escapeHtml(categoryLabel(activeCategory))} <span class="subcat-picker-count">(${totalCount})</span></button>`;
+      const otherBtn = `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="__none__">Other / Uncategorized <span class="subcat-picker-count">(${otherCount})</span></button>`;
+      bodyEl.innerHTML = allBtn + buildBrandPickerSectionHtml(brands, null, activeCategory) + otherBtn;
     }
 
     wireSubcatPicker({
@@ -499,7 +498,7 @@
 
       bodyEl.innerHTML = categorySlugs
         .map((slug) => {
-          const section = buildBrandPickerSectionHtml(byCategory[slug], categoryLabel(slug));
+          const section = buildBrandPickerSectionHtml(byCategory[slug], categoryLabel(slug), slug);
           return section.replace('class="subcat-picker-section"', `class="subcat-picker-section" data-category-slug="${slug}"`);
         })
         .join("");

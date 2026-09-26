@@ -396,7 +396,8 @@ main {
   background: var(--bg);
 }
 
-.tree-count {
+.tree-count,
+.subcat-picker-count {
   color: var(--ink-soft);
   font-weight: 400;
   font-size: 0.8em;
