@@ -841,13 +841,14 @@
           ${photo ? `<img src="${photo}" alt="" data-zoom-photo="${photo}" />` : `<div class="no-photo" style="width:110px;height:110px;">No photo</div>`}
           <div class="info">
             <h4>${escapeHtml(item.title)} <span class="meta">(${categoryLabel(item.category)})</span> ${badges}</h4>
-            <div class="meta">$${Number(item.asking_price).toFixed(2)} &middot; Qty ${item.quantity} &middot; ${item.status}</div>
+            <div class="meta">$${Number(item.asking_price).toFixed(2)} &middot; Qty ${item.quantity} &middot; ${item.status}${item.price_checked_at ? ` &middot; Price checked ${new Date(item.price_checked_at).toLocaleDateString()}` : ""}</div>
             <div class="btn-row">
               <button class="btn secondary" data-action="edit" data-id="${item.id}">Edit</button>
               <button class="btn danger" data-action="delete" data-id="${item.id}">Delete</button>
               <button class="btn secondary" data-action="listing" data-id="${item.id}">Generate Listing Text</button>
               <button class="btn secondary" data-action="toggle-featured" data-id="${item.id}">${item.featured_at ? "Unfeature" : "Feature as New"}</button>
               <button class="btn secondary" data-action="toggle-promo" data-id="${item.id}">${item.promo_at ? "Remove from Sale" : "Mark on Sale"}</button>
+              <button class="btn secondary" data-action="toggle-price-checked" data-id="${item.id}">${item.price_checked_at ? "Clear Price-Checked" : "Mark Price Checked Today"}</button>
             </div>
             <div class="btn-row">
               <span class="meta" style="align-self:center;">Post to:</span>
@@ -878,6 +879,9 @@
       );
       listEl.querySelectorAll('[data-action="toggle-promo"]').forEach((btn) =>
         btn.addEventListener("click", () => toggleFlag(btn.dataset.id, "promo_at"))
+      );
+      listEl.querySelectorAll('[data-action="toggle-price-checked"]').forEach((btn) =>
+        btn.addEventListener("click", () => toggleFlag(btn.dataset.id, "price_checked_at"))
       );
       listEl.querySelectorAll('[data-action="post-ebay"]').forEach((btn) =>
         btn.addEventListener("click", () => copyListingAndOpen(btn.dataset.id, "https://www.ebay.com/sl/sell"))
