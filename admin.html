@@ -828,12 +828,21 @@
 
       const qtyOf = (i) => Number(i.quantity) || 0;
       const valueOf = (i) => (Number(i.asking_price) || 0) * qtyOf(i);
+      // Treats a missing cost as $0 (rather than skipping the item), which
+      // overstates profit for anything not yet costed -- the "No cost set"
+      // flag on the inventory rows above is what catches those.
+      const costOf = (i) => (i.cost_basis !== null && i.cost_basis !== undefined ? Number(i.cost_basis) : 0) * qtyOf(i);
       const sum = (list, fn) => list.reduce((total, i) => total + fn(i), 0);
 
       const stockQty = sum(inStock, qtyOf);
       const stockValue = sum(inStock, valueOf);
+      const stockCost = sum(inStock, costOf);
+      const stockProfit = stockValue - stockCost;
       const soldQty = sum(sold, qtyOf);
       const soldValue = sum(sold, valueOf);
+      const soldCost = sum(sold, costOf);
+      const soldProfit = soldValue - soldCost;
+      const missingCostCount = items.filter((i) => i.cost_basis === null || i.cost_basis === undefined).length;
 
       const stat = (label, value) => `
         <div class="stat-tile">
@@ -845,26 +854,31 @@
         stat("Listings in stock", inStock.length) +
         stat("Units in stock", stockQty) +
         stat("Resale value in stock", `$${stockValue.toFixed(2)}`) +
+        stat("Cost basis in stock", `$${stockCost.toFixed(2)}`) +
+        stat("Est. profit if all sold", `$${stockProfit.toFixed(2)}`) +
         stat("Units sold to date", soldQty) +
-        stat("Revenue to date", `$${soldValue.toFixed(2)}`);
+        stat("Revenue to date", `$${soldValue.toFixed(2)}`) +
+        stat("Profit to date", `$${soldProfit.toFixed(2)}`) +
+        (missingCostCount > 0 ? stat("Listings missing a cost", missingCostCount) : "");
 
       const byCategory = {};
       inStock.forEach((i) => {
         const label = categoryLabel(i.category);
-        if (!byCategory[label]) byCategory[label] = { qty: 0, value: 0 };
+        if (!byCategory[label]) byCategory[label] = { qty: 0, value: 0, cost: 0 };
         byCategory[label].qty += qtyOf(i);
         byCategory[label].value += valueOf(i);
+        byCategory[label].cost += costOf(i);
       });
       const rows = Object.entries(byCategory).sort((a, b) => b[1].value - a[1].value);
       document.getElementById("inventoryCategoryTable").innerHTML = `
-        <tr><th>Category</th><th>Units in stock</th><th>Resale value</th></tr>
+        <tr><th>Category</th><th>Units in stock</th><th>Resale value</th><th>Cost basis</th><th>Est. profit</th></tr>
         ${rows
           .map(
             ([label, v]) =>
-              `<tr><td>${escapeHtml(label)}</td><td>${v.qty}</td><td>$${v.value.toFixed(2)}</td></tr>`
+              `<tr><td>${escapeHtml(label)}</td><td>${v.qty}</td><td>$${v.value.toFixed(2)}</td><td>$${v.cost.toFixed(2)}</td><td>$${(v.value - v.cost).toFixed(2)}</td></tr>`
           )
           .join("")}
-        <tr class="summary-total-row"><td>Total</td><td>${stockQty}</td><td>$${stockValue.toFixed(2)}</td></tr>
+        <tr class="summary-total-row"><td>Total</td><td>${stockQty}</td><td>$${stockValue.toFixed(2)}</td><td>$${stockCost.toFixed(2)}</td><td>$${stockProfit.toFixed(2)}</td></tr>
       `;
     }
 
