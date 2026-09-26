@@ -1,6 +1,6 @@
 // Bump this by 1 every time this file (or admin.html/index.html) is redeployed.
 // Lets the page detect and warn if the browser is running a stale cached copy.
-const LOCAL_VERSION = "49";
+const LOCAL_VERSION = "50";
 
 // Public site URL — used in the Kijiji/FB listing generator to point buyers back to the full catalog.
 const SITE_URL = "https://vintage-play.pages.dev";
@@ -129,6 +129,25 @@ async function loadItemTypes() {
 
 function itemTypesForCategory(categorySlug) {
   return ALL_ITEM_TYPES.filter((t) => t.category === categorySlug);
+}
+
+// Populated by loadBrandGroups() before the page renders. A "brand group" is
+// the controlled list of manufacturer names (e.g. "Sega", "Nintendo") a
+// subcategory can optionally belong to — a fixed list instead of free text so
+// "Sega" vs "sega" typos can't split one manufacturer into two tree branches.
+let ALL_BRAND_GROUPS = [];
+
+async function loadBrandGroups() {
+  const { data, error } = await supabaseClient
+    .from("brand_groups")
+    .select("*")
+    .order("label", { ascending: true });
+  if (!error) ALL_BRAND_GROUPS = data;
+  return ALL_BRAND_GROUPS;
+}
+
+function brandGroupsForCategory(categorySlug) {
+  return ALL_BRAND_GROUPS.filter((g) => g.category === categorySlug);
 }
 
 function slugify(label) {

@@ -54,12 +54,26 @@
     </div>
 
     <div class="section">
+      <h2>Groups</h2>
+      <p class="hint">Manufacturer-style groupings a subcategory can collapse under (e.g. "Sega" so Genesis/32X/Saturn nest under one heading instead of listing dozens of platforms at once). Picked from a list everywhere else so a typo can never split one manufacturer into two — no photo needed for these.</p>
+      <label for="groupCategory">Category this belongs to</label>
+      <select id="groupCategory"></select>
+      <label for="newGroupLabel">Group Name</label>
+      <input type="text" id="newGroupLabel" placeholder="e.g. Sega, Nintendo" />
+      <button class="btn secondary" id="addGroupBtn">Add Group</button>
+      <p class="error-text" id="groupError" hidden></p>
+      <div class="btn-row" id="groupManager" style="margin-top:0.75rem;"></div>
+    </div>
+
+    <div class="section">
       <h2>Subcategories</h2>
       <p class="hint">Optional sub-grouping within a category — e.g. DC / Marvel / Image within Comics, or Sega Master System / NES / Arcade within Video Games. Shown as cover-photo tiles or a dropdown depending on that category's setting above.</p>
       <label for="brandCategory">Category this belongs to</label>
       <select id="brandCategory"></select>
-      <label for="newBrandGroup">Group (optional — e.g. "Sega" or "Nintendo" so Genesis/32X/Saturn or NES/SNES/N64 can collapse under one heading instead of listing dozens of platforms at once)</label>
-      <input type="text" id="newBrandGroup" placeholder="Leave blank if this one doesn't need grouping" />
+      <label for="newBrandGroup">Group (optional — add it above first if you don't see it here)</label>
+      <select id="newBrandGroup">
+        <option value="">None</option>
+      </select>
       <label for="newBrandLabel">Subcategory Name</label>
       <input type="text" id="newBrandLabel" placeholder="e.g. DC, or Genesis" />
       <label for="newBrandPhoto">Cover Photo</label>
@@ -203,6 +217,32 @@
       if (previousValue) select.value = previousValue;
     }
 
+    function populateGroupCategorySelect() {
+      const select = document.getElementById("groupCategory");
+      const previousValue = select.value;
+      select.innerHTML = ALL_CATEGORIES.map(
+        (c) => `<option value="${c.slug}">${c.label}</option>`
+      ).join("");
+      if (previousValue) select.value = previousValue;
+    }
+
+    // Populates the Group dropdown on the "Add Subcategory" form from the
+    // controlled brand_groups list for whichever category is currently
+    // selected there — kept separate from populateGroupCategorySelect (which
+    // populates the Groups section's own category picker).
+    function populateNewBrandGroupSelect() {
+      const select = document.getElementById("newBrandGroup");
+      const previousValue = select.value;
+      const category = document.getElementById("brandCategory").value;
+      const groups = brandGroupsForCategory(category);
+      select.innerHTML =
+        `<option value="">None</option>` +
+        groups.map((g) => `<option value="${escapeHtml(g.label)}">${escapeHtml(g.label)}</option>`).join("");
+      if (previousValue) select.value = previousValue;
+    }
+
+    document.getElementById("brandCategory").addEventListener("change", populateNewBrandGroupSelect);
+
     function populateBrandSelect() {
       const select = document.getElementById("brand");
       const previousValue = select.value;
@@ -297,6 +337,55 @@
       }
     });
 
+    function renderGroupManager() {
+      const managerEl = document.getElementById("groupManager");
+      managerEl.innerHTML = "";
+      ALL_BRAND_GROUPS.forEach((group) => {
+        const wrap = document.createElement("div");
+        wrap.style.textAlign = "center";
+        wrap.innerHTML = `
+          <div style="font-size:0.8rem;font-weight:700;">${escapeHtml(group.label)}</div>
+          <div style="font-size:0.65rem;color:var(--ink-soft);">${categoryLabel(group.category)}</div>
+          <button type="button" class="btn danger" data-remove-group="${group.slug}" style="margin-top:0.25rem;padding:0.2rem 0.5rem;font-size:0.7rem;">Delete</button>
+        `;
+        managerEl.appendChild(wrap);
+      });
+      managerEl.querySelectorAll("[data-remove-group]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          if (!confirm(`Delete group "${btn.dataset.removeGroup}"? Subcategories already using it keep their group name as plain text, but it won't appear in this dropdown anymore.`)) return;
+          await supabaseClient.from("brand_groups").delete().eq("slug", btn.dataset.removeGroup);
+          await loadBrandGroups();
+          renderGroupManager();
+          populateNewBrandGroupSelect();
+        })
+      );
+    }
+
+    document.getElementById("addGroupBtn").addEventListener("click", async () => {
+      const errorEl = document.getElementById("groupError");
+      errorEl.hidden = true;
+      const label = document.getElementById("newGroupLabel").value.trim();
+      const category = document.getElementById("groupCategory").value;
+      if (!label) {
+        errorEl.textContent = "Group name is required.";
+        errorEl.hidden = false;
+        return;
+      }
+      try {
+        const { error } = await supabaseClient
+          .from("brand_groups")
+          .insert({ slug: slugify(label), label, category });
+        if (error) throw error;
+        document.getElementById("newGroupLabel").value = "";
+        await loadBrandGroups();
+        renderGroupManager();
+        populateNewBrandGroupSelect();
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.hidden = false;
+      }
+    });
+
     function renderBrandManager() {
       const managerEl = document.getElementById("brandManager");
       managerEl.innerHTML = "";
@@ -312,6 +401,12 @@
             <button type="button" class="btn secondary" data-edit-group="${brand.slug}" style="margin-top:0;padding:0.2rem 0.5rem;font-size:0.7rem;">${brand.group_label ? "Change Group" : "Add Group"}</button>
             <button type="button" class="btn danger" data-remove-brand="${brand.slug}" style="margin-top:0;padding:0.2rem 0.5rem;font-size:0.7rem;">Delete</button>
           </div>
+          <select data-group-input="${brand.slug}" hidden style="margin-top:0.25rem;">
+            <option value="">None</option>
+            ${brandGroupsForCategory(brand.category)
+              .map((g) => `<option value="${escapeHtml(g.label)}" ${g.label === brand.group_label ? "selected" : ""}>${escapeHtml(g.label)}</option>`)
+              .join("")}
+          </select>
           <input type="file" accept="image/*" data-photo-input="${brand.slug}" hidden />
         `;
         managerEl.appendChild(wrap);
@@ -326,20 +421,19 @@
         })
       );
       managerEl.querySelectorAll("[data-edit-group]").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const slug = btn.dataset.editGroup;
-          const current = ALL_BRANDS.find((b) => b.slug === slug);
-          const newGroup = prompt(
-            `Group for "${current?.label}" (e.g. "Sega" or "Nintendo") — leave blank to remove grouping:`,
-            current?.group_label || ""
-          );
-          if (newGroup === null) return;
+        const slug = btn.dataset.editGroup;
+        const selectEl = managerEl.querySelector(`[data-group-input="${slug}"]`);
+        btn.addEventListener("click", () => {
+          selectEl.hidden = false;
+          selectEl.focus();
+        });
+        selectEl.addEventListener("change", async () => {
           const errorEl = document.getElementById("brandError");
           errorEl.hidden = true;
           try {
             const { error } = await supabaseClient
               .from("brands")
-              .update({ group_label: newGroup.trim() || null })
+              .update({ group_label: selectEl.value || null })
               .eq("slug", slug);
             if (error) throw error;
             await loadBrands();
@@ -379,7 +473,7 @@
 
       const label = document.getElementById("newBrandLabel").value.trim();
       const category = document.getElementById("brandCategory").value;
-      const group_label = document.getElementById("newBrandGroup").value.trim() || null;
+      const group_label = document.getElementById("newBrandGroup").value || null;
       const fileInput = document.getElementById("newBrandPhoto");
 
       if (!label) {
@@ -400,7 +494,9 @@
         if (error) throw error;
 
         document.getElementById("newBrandLabel").value = "";
-        document.getElementById("newBrandGroup").value = "";
+        // Group selection is left as-is on purpose — adding several
+        // subcategories under the same group (e.g. Sega Genesis, then Sega
+        // Master System) is the common case.
         fileInput.value = "";
         await loadBrands();
         renderBrandManager();
@@ -524,6 +620,8 @@
       populateInventoryCategoryFilter();
       populateBrandCategorySelect();
       populateBrandSelect();
+      populateGroupCategorySelect();
+      populateNewBrandGroupSelect();
       populateItemTypeCategorySelect();
       populateItemTypeSelect();
       renderCategoryManager();
@@ -543,9 +641,13 @@
       populateInventoryCategoryFilter();
       populateBrandCategorySelect();
       renderCategoryManager();
+      populateGroupCategorySelect();
+      await loadBrandGroups();
+      renderGroupManager();
       await loadBrands();
       renderBrandManager();
       populateBrandSelect();
+      populateNewBrandGroupSelect();
       populateItemTypeCategorySelect();
       await loadItemTypes();
       renderItemTypeManager();
