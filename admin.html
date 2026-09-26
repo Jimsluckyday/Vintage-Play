@@ -183,6 +183,12 @@
     </div>
 
     <div class="section">
+      <h2>Inventory Summary</h2>
+      <div class="stat-grid" id="inventoryStatGrid"></div>
+      <table class="summary-table" id="inventoryCategoryTable"></table>
+    </div>
+
+    <div class="section">
       <h2>Inventory (<span id="itemCount">0</span>)</h2>
       <div class="btn-row">
         <input type="text" id="inventorySearch" placeholder="Search by title..." style="max-width:300px;" />
@@ -812,7 +818,58 @@
       renderItemList();
     }
 
+    // Bookkeeping tally: how many items are on hand and what they'd be worth
+    // at asking price if everything sold, versus what's already sold to date.
+    // Always computed from the full `items` array, not the search/filter/
+    // pagination-narrowed list below, so it stays a true running total.
+    function renderInventorySummary() {
+      const inStock = items.filter((i) => i.status !== "sold");
+      const sold = items.filter((i) => i.status === "sold");
+
+      const qtyOf = (i) => Number(i.quantity) || 0;
+      const valueOf = (i) => (Number(i.asking_price) || 0) * qtyOf(i);
+      const sum = (list, fn) => list.reduce((total, i) => total + fn(i), 0);
+
+      const stockQty = sum(inStock, qtyOf);
+      const stockValue = sum(inStock, valueOf);
+      const soldQty = sum(sold, qtyOf);
+      const soldValue = sum(sold, valueOf);
+
+      const stat = (label, value) => `
+        <div class="stat-tile">
+          <div class="stat-value">${value}</div>
+          <div class="stat-label">${label}</div>
+        </div>
+      `;
+      document.getElementById("inventoryStatGrid").innerHTML =
+        stat("Listings in stock", inStock.length) +
+        stat("Units in stock", stockQty) +
+        stat("Resale value in stock", `$${stockValue.toFixed(2)}`) +
+        stat("Units sold to date", soldQty) +
+        stat("Revenue to date", `$${soldValue.toFixed(2)}`);
+
+      const byCategory = {};
+      inStock.forEach((i) => {
+        const label = categoryLabel(i.category);
+        if (!byCategory[label]) byCategory[label] = { qty: 0, value: 0 };
+        byCategory[label].qty += qtyOf(i);
+        byCategory[label].value += valueOf(i);
+      });
+      const rows = Object.entries(byCategory).sort((a, b) => b[1].value - a[1].value);
+      document.getElementById("inventoryCategoryTable").innerHTML = `
+        <tr><th>Category</th><th>Units in stock</th><th>Resale value</th></tr>
+        ${rows
+          .map(
+            ([label, v]) =>
+              `<tr><td>${escapeHtml(label)}</td><td>${v.qty}</td><td>$${v.value.toFixed(2)}</td></tr>`
+          )
+          .join("")}
+        <tr class="summary-total-row"><td>Total</td><td>${stockQty}</td><td>$${stockValue.toFixed(2)}</td></tr>
+      `;
+    }
+
     function renderItemList() {
+      renderInventorySummary();
       document.getElementById("itemCount").textContent = items.length;
 
       const searchTerm = document.getElementById("inventorySearch").value.trim().toLowerCase();
