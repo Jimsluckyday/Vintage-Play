@@ -512,7 +512,8 @@ main {
 .subcat-picker[hidden],
 .subcat-picker-panel[hidden],
 .subcat-picker-item[hidden],
-.subcat-picker-group[hidden] {
+.subcat-picker-group[hidden],
+.lb-variants[hidden] {
   display: none !important;
 }
 
@@ -750,6 +751,36 @@ main {
   padding: 0.5rem 0.7rem;
   margin: 0 0 1rem;
   line-height: 1.4;
+}
+
+.lb-variants {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.lb-variant-row {
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.lb-variant-row .lb-condition-notes {
+  margin: 0;
+  width: 100%;
+}
+
+.lb-variant-row .price {
+  font-family: 'Bangers', cursive;
+  font-size: 1.1rem;
+  background: var(--mustard);
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  padding: 0.1rem 0.6rem;
 }
 
 .btn-link {

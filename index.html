@@ -149,6 +149,7 @@
         <p id="lbDescription" hidden></p>
         <p class="lb-condition-notes" id="lbConditionNotes" hidden></p>
         <button type="button" class="btn secondary" id="lbAddCartBtn">Add to Cart</button>
+        <div class="lb-variants" id="lbVariants" hidden></div>
       </div>
     </div>
   </div>
@@ -685,12 +686,42 @@
       listEl.innerHTML = "";
       emptyNote.hidden = items.length > 0;
 
+      // Items sharing a variant_group (same title/listing, different
+      // condition + price — e.g. 3 copies of one game in different shape)
+      // render as a single "Starts at $X" row instead of one row each.
+      // Preserve the existing title sort order; just skip a group's later
+      // members once its first one has already produced the combined row.
+      const seenGroups = new Set();
       items.forEach((item) => {
+        if (item.variant_group) {
+          if (seenGroups.has(item.variant_group)) return;
+          seenGroups.add(item.variant_group);
+          const variants = items.filter((i) => i.variant_group === item.variant_group);
+          const row = document.createElement("div");
+          row.className = "list-row";
+          row.innerHTML = buildGroupRowInnerHtml(variants);
+          listEl.appendChild(row);
+          return;
+        }
         const row = document.createElement("div");
         row.className = "list-row";
         row.innerHTML = buildListRowInnerHtml(item);
         listEl.appendChild(row);
       });
+    }
+
+    function buildGroupRowInnerHtml(variants) {
+      const first = variants[0];
+      const available = variants.filter((v) => v.status === "available");
+      const priceSource = available.length ? available : variants;
+      const minPrice = Math.min(...priceSource.map((v) => Number(v.asking_price)));
+      return `
+        <span class="tag">${itemTagLabel(first)}</span>
+        <span class="tag-condition">${variants.length} condition options</span>
+        <span class="list-row-title">${escapeHtml(first.title)}</span>
+        <span class="price">Starts at $${minPrice.toFixed(2)}</span>
+        <button type="button" class="btn-link" data-group-details="${first.variant_group}">Details</button>
+      `;
     }
 
     // "Sega Genesis" instead of just "Genesis" — combining the group (manufacturer)
@@ -851,6 +882,12 @@
       lightboxItemId = item.id;
       renderLightboxImage();
 
+      // Reset out of variant-group mode in case the lightbox was last shown
+      // for a grouped listing (openGroupDetails hides these same elements).
+      document.getElementById("lbVariants").hidden = true;
+      document.getElementById("lbPrice").hidden = false;
+      document.getElementById("lbAddCartBtn").hidden = item.status !== "available";
+
       document.getElementById("lbTitle").textContent = item.title;
       document.getElementById("lbPrice").textContent = `$${Number(item.asking_price).toFixed(2)}`;
 
@@ -874,8 +911,61 @@
       notesEl.hidden = !item.condition_notes;
       notesEl.textContent = item.condition_notes ? `Condition notes: ${item.condition_notes}` : "";
 
-      const addCartBtn = document.getElementById("lbAddCartBtn");
-      addCartBtn.hidden = item.status !== "available";
+      document.getElementById("lightboxDetails").hidden = false;
+      document.getElementById("lightbox").hidden = false;
+    }
+
+    // For a group of items sharing a variant_group (same title, different
+    // condition/price — e.g. 3 copies of the same game in different shape).
+    // Shows the shared title/age/description once, then a per-variant
+    // breakdown of condition + honest condition_notes + price, each with its
+    // own Add to Cart. His own pricing-strategy reasoning never appears here —
+    // only the public condition fields, and internal_notes isn't even fetched
+    // by the public site (see loadItems()).
+    function openGroupDetails(variants) {
+      const first = variants[0];
+      lightboxPhotos = first.photo_urls || [];
+      lightboxIndex = 0;
+      lightboxAlt = first.title;
+      lightboxItemId = null;
+      renderLightboxImage();
+
+      document.getElementById("lbTitle").textContent = first.title;
+      document.getElementById("lbHighlight").hidden = true;
+      document.getElementById("lbPrice").hidden = true;
+      document.getElementById("lbCondition").hidden = true;
+      document.getElementById("lbConditionNotes").hidden = true;
+      document.getElementById("lbAddCartBtn").hidden = true;
+
+      const ageEl = document.getElementById("lbAge");
+      ageEl.hidden = !first.release_year;
+      ageEl.textContent = first.release_year ? `Age: ${first.release_year}` : "";
+
+      const descEl = document.getElementById("lbDescription");
+      descEl.hidden = !first.description;
+      descEl.textContent = first.description || "";
+
+      const variantsEl = document.getElementById("lbVariants");
+      variantsEl.hidden = false;
+      const sorted = [...variants].sort((a, b) => Number(a.asking_price) - Number(b.asking_price));
+      variantsEl.innerHTML = sorted
+        .map((v) => {
+          const conditionText = conditionTagLabel(v) || "Condition not specified";
+          const notesHtml = v.condition_notes ? `<p class="lb-condition-notes">${escapeHtml(v.condition_notes)}</p>` : "";
+          const actionHtml =
+            v.status === "available"
+              ? `<button type="button" class="btn secondary" data-add-cart="${v.id}">Add to Cart</button>`
+              : `<span class="status ${v.status}">${v.status.toUpperCase()}</span>`;
+          return `
+            <div class="lb-variant-row">
+              <span class="tag-condition">${escapeHtml(conditionText)}</span>
+              ${notesHtml}
+              <span class="price">$${Number(v.asking_price).toFixed(2)}</span>
+              ${actionHtml}
+            </div>
+          `;
+        })
+        .join("");
 
       document.getElementById("lightboxDetails").hidden = false;
       document.getElementById("lightbox").hidden = false;
@@ -923,6 +1013,10 @@
         const item = allItems.find((i) => i.id === e.target.dataset.details);
         if (item) openItemDetails(item);
       }
+      if (e.target.dataset.groupDetails) {
+        const variants = allItems.filter((i) => i.variant_group === e.target.dataset.groupDetails);
+        if (variants.length) openGroupDetails(variants);
+      }
       if (e.target.dataset.addCart) {
         addToCart(e.target.dataset.addCart);
       }
@@ -931,7 +1025,12 @@
     document.getElementById("newArrivalsGrid").addEventListener("click", handleLightboxDelegate);
     document.getElementById("listRows").addEventListener("click", handleLightboxDelegate);
 
-    document.getElementById("lightboxDetails").addEventListener("click", (e) => e.stopPropagation());
+    document.getElementById("lightboxDetails").addEventListener("click", (e) => {
+      e.stopPropagation();
+      // Per-variant "Add to Cart" buttons inside the grouped-listing breakdown
+      // (openGroupDetails) — the single-item lbAddCartBtn has its own listener.
+      if (e.target.dataset.addCart) addToCart(e.target.dataset.addCart);
+    });
     document.getElementById("lbAddCartBtn").addEventListener("click", () => {
       if (lightboxItemId) addToCart(lightboxItemId);
     });
@@ -1272,7 +1371,12 @@
       while (true) {
         const { data, error } = await supabaseClient
           .from("items")
-          .select("*")
+          // Explicit column list, not "*" — cost_basis and internal_notes are
+          // admin-only (his cost/margin and private pricing-strategy reasoning)
+          // and must never reach a visitor's browser, not just stay unrendered.
+          .select(
+            "id, title, category, brand, item_type, variant_group, condition_grade, completeness, release_year, highlight_note, description, condition_notes, asking_price, quantity, status, photo_urls, featured_at, promo_at"
+          )
           .neq("status", "sold")
           .order("title", { ascending: true })
           .range(offset, offset + pageSize - 1);
