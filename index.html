@@ -121,6 +121,8 @@
     <div class="grid" id="categoryGrid" hidden></div>
     <button class="btn secondary" id="backToBrandsBtn" hidden style="margin:0 0 1rem;">&larr; Back to publishers</button>
     <div class="grid" id="brandGrid" hidden></div>
+    <button class="btn secondary" id="treeBackBtn" hidden style="margin:0 0 1rem;"></button>
+    <div class="category-tree" id="categoryTree" hidden></div>
     <div class="grid" id="grid"></div>
     <div class="list-rows" id="listRows"></div>
     <p class="empty-note" id="emptyNote" hidden>No items found.</p>
@@ -164,14 +166,37 @@
     let allItems = [];
     let activeCategory = "all";
     let activeBrand = null;
+    let activeItemType = null;
     let searchTerm = "";
     let activeLetter = null;
 
     function resetDrilldown() {
       activeBrand = null;
+      activeItemType = null;
       searchTerm = "";
       activeLetter = null;
       document.getElementById("itemSearch").value = "";
+      history.replaceState({}, "", location.pathname);
+    }
+
+    // Reads ?category=&type=&brand= from the URL so a category-tree leaf link
+    // (opened fresh, reloaded, or reached via back/forward) lands directly on
+    // the right filtered view instead of the "All" landing page.
+    function applyUrlParams() {
+      const params = new URLSearchParams(location.search);
+      const cat = params.get("category");
+      if (!cat) return;
+      activeCategory = cat;
+      activeItemType = params.get("type") || null;
+      activeBrand = params.get("brand") || null;
+    }
+
+    function treeLeafUrl(category, typeSlug, brandSlug) {
+      const params = new URLSearchParams();
+      params.set("category", category);
+      params.set("type", typeSlug);
+      if (brandSlug) params.set("brand", brandSlug);
+      return `?${params.toString()}`;
     }
 
     function renderFilters() {
@@ -210,6 +235,119 @@
       const cat = ALL_CATEGORIES.find((c) => c.slug === slug);
       return cat?.subcat_display === "dropdown";
     }
+
+    // Categories that need a real second dimension on top of subcategory
+    // (Video Games: Consoles / Games / Accessories, each broken down by
+    // manufacturer then platform) use a vertical, collapsed-by-default tree
+    // instead of tiles or a dropdown — see renderCategoryTree().
+    function categoryUsesTree(slug) {
+      const cat = ALL_CATEGORIES.find((c) => c.slug === slug);
+      return cat?.subcat_display === "tree";
+    }
+
+    // Builds one collapsed <details> tree for a single item type (e.g. "Consoles"),
+    // nesting its brands the same way the picker does (grouped under a
+    // manufacturer where set, flat otherwise) — but as real <a href> leaves so a
+    // plain click updates this page in place while ctrl/cmd-click or "open in
+    // new tab" still works via the browser's own native anchor behavior.
+    function buildTypeTreeNodeHtml(type, itemsInCategory) {
+      const itemsOfType = itemsInCategory.filter((i) => i.item_type === type.slug);
+      if (itemsOfType.length === 0) return "";
+
+      const brandSlugsPresent = new Set(itemsOfType.map((i) => i.brand).filter(Boolean));
+      const brands = currentCategoryBrands().filter((b) => brandSlugsPresent.has(b.slug));
+      const hasUnbranded = itemsOfType.some((i) => !i.brand);
+
+      const leafHtml = (b) => {
+        const count = itemsOfType.filter((i) => i.brand === b.slug).length;
+        return `<a href="${treeLeafUrl(activeCategory, type.slug, b.slug)}" class="tree-leaf" data-leaf data-type="${type.slug}" data-brand="${b.slug}">${escapeHtml(b.label)} <span class="tree-count">(${count})</span></a>`;
+      };
+
+      const grouped = brands.filter((b) => b.group_label);
+      const flat = brands.filter((b) => !b.group_label);
+      const groupNames = [...new Set(grouped.map((b) => b.group_label))].sort((a, b) => a.localeCompare(b));
+
+      const flatHtml = [...flat].sort((a, b) => a.label.localeCompare(b.label)).map(leafHtml).join("");
+      const groupsHtml = groupNames
+        .map((g) => {
+          const items = grouped
+            .filter((b) => b.group_label === g)
+            .sort((a, b) => a.label.localeCompare(b.label))
+            .map(leafHtml)
+            .join("");
+          return `
+            <details class="tree-node depth-2">
+              <summary>${escapeHtml(g)}</summary>
+              <div class="tree-children">${items}</div>
+            </details>
+          `;
+        })
+        .join("");
+
+      const unbrandedHtml = hasUnbranded
+        ? (() => {
+            const count = itemsOfType.filter((i) => !i.brand).length;
+            return `<a href="${treeLeafUrl(activeCategory, type.slug, "__none__")}" class="tree-leaf" data-leaf data-type="${type.slug}" data-brand="__none__">Other <span class="tree-count">(${count})</span></a>`;
+          })()
+        : "";
+
+      return `
+        <details class="tree-node depth-1">
+          <summary>${escapeHtml(type.label)} <span class="tree-count">(${itemsOfType.length})</span></summary>
+          <div class="tree-children">${flatHtml}${groupsHtml}${unbrandedHtml}</div>
+        </details>
+      `;
+    }
+
+    function renderCategoryTree() {
+      const treeEl = document.getElementById("categoryTree");
+      const types = itemTypesForCategory(activeCategory);
+      const itemsInCategory = allItems.filter((i) => i.category === activeCategory);
+
+      if (types.length === 0) {
+        treeEl.innerHTML = `<p class="hint">No item types set up yet for this category — add some in admin under "Item Types."</p>`;
+        return;
+      }
+
+      const typedSlugs = new Set(types.map((t) => t.slug));
+      const untyped = itemsInCategory.filter((i) => !i.item_type || !typedSlugs.has(i.item_type));
+      const untypedHtml = untyped.length
+        ? `<a href="${treeLeafUrl(activeCategory, "__none__", null)}" class="tree-leaf tree-node depth-1" data-leaf data-type="__none__" data-brand="">Other <span class="tree-count">(${untyped.length})</span></a>`
+        : "";
+
+      treeEl.innerHTML = types.map((t) => buildTypeTreeNodeHtml(t, itemsInCategory)).join("") + untypedHtml;
+    }
+
+    // One delegated listener handles every leaf link the tree ever renders,
+    // since renderCategoryTree() replaces #categoryTree's contents wholesale
+    // each time. A plain click updates the page in place (pushState, no
+    // reload); a modifier-click or middle-click is left alone so the browser's
+    // own "open in new tab" still works on the real href.
+    document.getElementById("categoryTree").addEventListener("click", (e) => {
+      const leaf = e.target.closest("[data-leaf]");
+      if (!leaf || e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+      e.preventDefault();
+      activeItemType = leaf.dataset.type;
+      activeBrand = leaf.dataset.brand || null;
+      history.pushState({}, "", leaf.getAttribute("href"));
+      renderGrid();
+    });
+
+    document.getElementById("treeBackBtn").addEventListener("click", () => {
+      activeItemType = null;
+      activeBrand = null;
+      history.pushState({}, "", `?category=${activeCategory}`);
+      renderGrid();
+    });
+
+    window.addEventListener("popstate", () => {
+      activeCategory = "all";
+      activeBrand = null;
+      activeItemType = null;
+      applyUrlParams();
+      renderFilters();
+      renderGrid();
+    });
 
     // Renders one subcategory-picker panel's contents: brands with a group_label
     // (e.g. "Sega") collapse under a <details> so dozens of platforms don't all
@@ -393,30 +531,47 @@
       const listEl = document.getElementById("listRows");
       const brandGridEl = document.getElementById("brandGrid");
       const backBtn = document.getElementById("backToBrandsBtn");
+      const treeEl = document.getElementById("categoryTree");
+      const treeBackBtn = document.getElementById("treeBackBtn");
       const emptyNote = document.getElementById("emptyNote");
 
       const searching = !!(searchTerm.trim() || activeLetter);
       const categoryBrands = currentCategoryBrands();
       const dropdownStyle = categoryUsesDropdown(activeCategory);
+      const treeStyle = categoryUsesTree(activeCategory);
+      // "Leaf selected" = a tree link has been clicked (or its URL loaded directly).
+      // Until then, tree-style categories show the collapsed browse tree instead
+      // of a flat list or tiles.
+      const leafSelected = treeStyle && activeItemType !== null;
 
       // Top level ("All"): category tiles, unless a search is active — then a global flat search.
       // (The letter bar itself is left off this top-level view on purpose — see below.)
       const showingCategoryTiles = activeCategory === "all" && !searching;
+      const showingTree = activeCategory !== "all" && treeStyle && !leafSelected && !searching;
       // Within a category that has brands and uses the tile style: publisher tiles,
-      // unless drilled in or searching. Dropdown-style categories skip this entirely —
-      // the subcategory select (rendered below) narrows the flat list directly instead.
-      const showingBrandTiles = activeCategory !== "all" && !dropdownStyle && categoryBrands.length > 0 && !activeBrand && !searching;
-      const showingFlatList = !showingCategoryTiles && !showingBrandTiles;
+      // unless drilled in or searching. Dropdown- and tree-style categories skip this
+      // entirely — their own picker/tree narrows the flat list directly instead.
+      const showingBrandTiles = activeCategory !== "all" && !dropdownStyle && !treeStyle && categoryBrands.length > 0 && !activeBrand && !searching;
+      const showingFlatList = !showingCategoryTiles && !showingTree && !showingBrandTiles;
 
       categoryGridEl.hidden = !showingCategoryTiles;
       brandGridEl.hidden = !showingBrandTiles;
+      treeEl.hidden = !showingTree;
       gridEl.hidden = !showingFlatList;
       listEl.hidden = !showingFlatList;
-      backBtn.hidden = !(activeCategory !== "all" && !dropdownStyle && categoryBrands.length > 0 && (activeBrand || searching));
+      backBtn.hidden = !(activeCategory !== "all" && !dropdownStyle && !treeStyle && categoryBrands.length > 0 && (activeBrand || searching));
+      treeBackBtn.hidden = !(activeCategory !== "all" && treeStyle && leafSelected && !searching);
+      if (!treeBackBtn.hidden) treeBackBtn.textContent = `← Back to ${categoryLabel(activeCategory)}`;
       emptyNote.hidden = true;
       document.getElementById("newArrivalsSection").hidden = true;
       renderSubcatPicker();
       renderGlobalSubcatPicker();
+
+      if (showingTree) {
+        renderCategoryTree();
+        renderLetterBar(allItems.filter((item) => item.category === activeCategory));
+        return;
+      }
 
       if (showingCategoryTiles) {
         renderNewArrivals();
@@ -495,9 +650,18 @@
       }
 
       // Flat listing: global search (activeCategory "all"), a category with no brands,
-      // drilled into a specific brand, or a search/letter overriding a tile view.
+      // drilled into a specific brand or tree leaf, or a search/letter overriding a tile view.
       const scopedItems = allItems.filter((item) => {
         if (activeCategory !== "all" && item.category !== activeCategory) return false;
+        if (leafSelected) {
+          const itemTypesKnown = new Set(itemTypesForCategory(activeCategory).map((t) => t.slug));
+          const matchesType =
+            activeItemType === "__none__" ? !item.item_type || !itemTypesKnown.has(item.item_type) : item.item_type === activeItemType;
+          if (!matchesType) return false;
+          if (activeBrand === "__none__") return !item.brand;
+          if (activeBrand) return item.brand === activeBrand;
+          return true;
+        }
         if (activeBrand === "__none__") return !item.brand;
         if (activeBrand) return item.brand === activeBrand;
         return true;
@@ -1106,6 +1270,8 @@
       emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
       await loadCategories();
       await loadBrands();
+      await loadItemTypes();
+      applyUrlParams();
       renderFilters();
       loadItems();
       startVersionWatch();

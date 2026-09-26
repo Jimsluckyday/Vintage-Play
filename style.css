@@ -317,6 +317,91 @@ main {
   margin-left: 0.9rem;
 }
 
+/* Category browse tree (e.g. Video Games: Consoles/Games/Accessories, each
+   broken down by manufacturer then platform) — collapsed by default, expands
+   in place. See categoryUsesTree() / renderCategoryTree() in index.html. */
+.category-tree {
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--bg-card);
+  padding: 0.3rem 0.6rem;
+  margin-bottom: 1.25rem;
+}
+
+.tree-node {
+  border-bottom: 1px solid var(--line);
+}
+
+.tree-node:last-child {
+  border-bottom: none;
+}
+
+.tree-node > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0.55rem 0.3rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tree-node.depth-1 > summary {
+  font-size: 0.95rem;
+}
+
+.tree-node.depth-2 > summary {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.tree-node > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tree-node > summary::before {
+  content: "\25B8";
+  display: inline-block;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  transition: transform 0.15s ease;
+}
+
+.tree-node[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.tree-node > summary:hover {
+  background: var(--bg);
+}
+
+.tree-children {
+  padding: 0 0 0.3rem 1.1rem;
+  border-left: 2px dashed var(--line);
+  margin-left: 0.7rem;
+}
+
+.tree-leaf {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--teal);
+  text-decoration: none;
+}
+
+.tree-leaf:hover {
+  background: var(--bg);
+}
+
+.tree-count {
+  color: var(--ink-soft);
+  font-weight: 400;
+  font-size: 0.8em;
+}
+
 .letter-bar {
   display: flex;
   flex-wrap: wrap;

@@ -1,6 +1,6 @@
 // Bump this by 1 every time this file (or admin.html/index.html) is redeployed.
 // Lets the page detect and warn if the browser is running a stale cached copy.
-const LOCAL_VERSION = "48";
+const LOCAL_VERSION = "49";
 
 // Public site URL — used in the Kijiji/FB listing generator to point buyers back to the full catalog.
 const SITE_URL = "https://vintage-play.pages.dev";
@@ -110,6 +110,25 @@ async function loadBrands() {
 
 function brandsForCategory(categorySlug) {
   return ALL_BRANDS.filter((b) => b.category === categorySlug);
+}
+
+// Populated by loadItemTypes() before the page renders. An "item type" is a
+// top-level split within a category (e.g. Consoles / Games / Accessories
+// within Video Games) — used only by categories set to the "tree" browsing
+// style; other categories simply have none.
+let ALL_ITEM_TYPES = [];
+
+async function loadItemTypes() {
+  const { data, error } = await supabaseClient
+    .from("item_types")
+    .select("*")
+    .order("label", { ascending: true });
+  if (!error) ALL_ITEM_TYPES = data;
+  return ALL_ITEM_TYPES;
+}
+
+function itemTypesForCategory(categorySlug) {
+  return ALL_ITEM_TYPES.filter((t) => t.category === categorySlug);
 }
 
 function slugify(label) {

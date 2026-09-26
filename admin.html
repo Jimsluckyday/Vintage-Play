@@ -70,6 +70,18 @@
     </div>
 
     <div class="section">
+      <h2>Item Types</h2>
+      <p class="hint">Only used by categories set to the "Tree" browsing style above — a top-level split like Consoles / Games / Accessories within Video Games. Categories on Tiles or Dropdown don't need these.</p>
+      <label for="itemTypeCategory">Category this belongs to</label>
+      <select id="itemTypeCategory"></select>
+      <label for="newItemTypeLabel">Type Name</label>
+      <input type="text" id="newItemTypeLabel" placeholder="e.g. Consoles, Games, Accessories" />
+      <button class="btn secondary" id="addItemTypeBtn">Add Item Type</button>
+      <p class="error-text" id="itemTypeError" hidden></p>
+      <div class="btn-row" id="itemTypeManager" style="margin-top:0.75rem;"></div>
+    </div>
+
+    <div class="section">
       <h2 id="formTitle">Add New Item</h2>
       <label for="title">Title</label>
       <input type="text" id="title" />
@@ -80,6 +92,11 @@
 
       <label for="brand">Subcategory (optional)</label>
       <select id="brand">
+        <option value="">None</option>
+      </select>
+
+      <label for="item_type">Item Type (optional — only used by categories set to the "Tree" style, e.g. Consoles/Games/Accessories within Video Games)</label>
+      <select id="item_type">
         <option value="">None</option>
       </select>
 
@@ -211,6 +228,75 @@
       if (previousValue) select.value = previousValue;
     }
 
+    function populateItemTypeCategorySelect() {
+      const select = document.getElementById("itemTypeCategory");
+      const previousValue = select.value;
+      select.innerHTML = ALL_CATEGORIES.map(
+        (c) => `<option value="${c.slug}">${c.label}</option>`
+      ).join("");
+      if (previousValue) select.value = previousValue;
+    }
+
+    function populateItemTypeSelect() {
+      const select = document.getElementById("item_type");
+      const previousValue = select.value;
+      const category = document.getElementById("category").value;
+      const matching = itemTypesForCategory(category);
+      select.innerHTML =
+        `<option value="">None</option>` +
+        matching.map((t) => `<option value="${t.slug}">${escapeHtml(t.label)}</option>`).join("");
+      if (previousValue) select.value = previousValue;
+    }
+
+    function renderItemTypeManager() {
+      const managerEl = document.getElementById("itemTypeManager");
+      managerEl.innerHTML = "";
+      ALL_ITEM_TYPES.forEach((type) => {
+        const wrap = document.createElement("div");
+        wrap.style.textAlign = "center";
+        wrap.innerHTML = `
+          <div style="font-size:0.8rem;font-weight:700;">${escapeHtml(type.label)}</div>
+          <div style="font-size:0.65rem;color:var(--ink-soft);">${categoryLabel(type.category)}</div>
+          <button type="button" class="btn danger" data-remove-item-type="${type.slug}" style="margin-top:0.25rem;padding:0.2rem 0.5rem;font-size:0.7rem;">Delete</button>
+        `;
+        managerEl.appendChild(wrap);
+      });
+      managerEl.querySelectorAll("[data-remove-item-type]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          if (!confirm(`Delete item type "${btn.dataset.removeItemType}"? Items using it keep their value but it won't show as a tree branch anymore.`)) return;
+          await supabaseClient.from("item_types").delete().eq("slug", btn.dataset.removeItemType);
+          await loadItemTypes();
+          renderItemTypeManager();
+          populateItemTypeSelect();
+        })
+      );
+    }
+
+    document.getElementById("addItemTypeBtn").addEventListener("click", async () => {
+      const errorEl = document.getElementById("itemTypeError");
+      errorEl.hidden = true;
+      const label = document.getElementById("newItemTypeLabel").value.trim();
+      const category = document.getElementById("itemTypeCategory").value;
+      if (!label) {
+        errorEl.textContent = "Type name is required.";
+        errorEl.hidden = false;
+        return;
+      }
+      try {
+        const { error } = await supabaseClient
+          .from("item_types")
+          .insert({ slug: slugify(label), label, category });
+        if (error) throw error;
+        document.getElementById("newItemTypeLabel").value = "";
+        await loadItemTypes();
+        renderItemTypeManager();
+        populateItemTypeSelect();
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.hidden = false;
+      }
+    });
+
     function renderBrandManager() {
       const managerEl = document.getElementById("brandManager");
       managerEl.innerHTML = "";
@@ -325,7 +411,10 @@
       }
     });
 
-    document.getElementById("category").addEventListener("change", populateBrandSelect);
+    document.getElementById("category").addEventListener("change", () => {
+      populateBrandSelect();
+      populateItemTypeSelect();
+    });
 
     function renderCategoryManager() {
       const managerEl = document.getElementById("categoryManager");
@@ -336,10 +425,10 @@
         wrap.innerHTML = `
           ${cat.cover_photo_url ? `<img src="${cat.cover_photo_url}" alt="" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:2px solid var(--ink);display:block;margin:0 auto;" />` : `<div style="width:60px;height:60px;border-radius:6px;border:2px solid var(--ink);"></div>`}
           <div style="font-size:0.75rem;margin-top:0.25rem;">${escapeHtml(cat.label)}</div>
-          <div style="font-size:0.65rem;color:var(--ink-soft);">Subcategories shown as: ${cat.subcat_display === "dropdown" ? "Dropdown" : "Tiles"}</div>
+          <div style="font-size:0.65rem;color:var(--ink-soft);">Subcategories shown as: ${{tiles:"Tiles",dropdown:"Dropdown",tree:"Tree (Type > Manufacturer > Platform)"}[cat.subcat_display] || "Tiles"}</div>
           <button type="button" class="btn secondary" data-edit-cat-photo="${cat.slug}" style="margin-top:0.25rem;padding:0.2rem 0.5rem;font-size:0.7rem;">${cat.cover_photo_url ? "Change Photo" : "Add Photo"}</button>
           <button type="button" class="btn secondary" data-rename-cat="${cat.slug}" style="margin-top:0.25rem;padding:0.2rem 0.5rem;font-size:0.7rem;">Rename</button>
-          <button type="button" class="btn secondary" data-toggle-subcat-display="${cat.slug}" style="margin-top:0.25rem;padding:0.2rem 0.5rem;font-size:0.7rem;">Switch to ${cat.subcat_display === "dropdown" ? "Tiles" : "Dropdown"}</button>
+          <button type="button" class="btn secondary" data-toggle-subcat-display="${cat.slug}" style="margin-top:0.25rem;padding:0.2rem 0.5rem;font-size:0.7rem;">Switch to ${{tiles:"Dropdown",dropdown:"Tree",tree:"Tiles"}[cat.subcat_display] || "Dropdown"}</button>
           <input type="file" accept="image/*" data-cat-photo-input="${cat.slug}" hidden />
         `;
         managerEl.appendChild(wrap);
@@ -348,7 +437,7 @@
         btn.addEventListener("click", async () => {
           const slug = btn.dataset.toggleSubcatDisplay;
           const current = ALL_CATEGORIES.find((c) => c.slug === slug);
-          const next = current?.subcat_display === "dropdown" ? "tiles" : "dropdown";
+          const next = { tiles: "dropdown", dropdown: "tree", tree: "tiles" }[current?.subcat_display] || "dropdown";
           const errorEl = document.getElementById("categoryError");
           errorEl.hidden = true;
           try {
@@ -435,6 +524,8 @@
       populateInventoryCategoryFilter();
       populateBrandCategorySelect();
       populateBrandSelect();
+      populateItemTypeCategorySelect();
+      populateItemTypeSelect();
       renderCategoryManager();
     });
 
@@ -455,6 +546,10 @@
       await loadBrands();
       renderBrandManager();
       populateBrandSelect();
+      populateItemTypeCategorySelect();
+      await loadItemTypes();
+      renderItemTypeManager();
+      populateItemTypeSelect();
       const { data } = await supabaseClient.auth.getSession();
       if (data.session) {
         showAdmin();
@@ -804,6 +899,8 @@
       document.getElementById("category").value = item.category || "games";
       populateBrandSelect();
       document.getElementById("brand").value = item.brand || "";
+      populateItemTypeSelect();
+      document.getElementById("item_type").value = item.item_type || "";
       document.getElementById("condition_grade").value = item.condition_grade || "";
       document.getElementById("release_year").value = item.release_year || "";
       document.getElementById("highlight_note").value = item.highlight_note || "";
@@ -828,6 +925,8 @@
       document.getElementById("category").value = "games";
       populateBrandSelect();
       document.getElementById("brand").value = "";
+      populateItemTypeSelect();
+      document.getElementById("item_type").value = "";
       document.getElementById("condition_grade").value = "";
       document.getElementById("release_year").value = "";
       document.getElementById("highlight_note").value = "";
@@ -867,6 +966,7 @@
         title: document.getElementById("title").value.trim(),
         category: document.getElementById("category").value,
         brand: document.getElementById("brand").value || null,
+        item_type: document.getElementById("item_type").value || null,
         condition_grade: document.getElementById("condition_grade").value || null,
         release_year: document.getElementById("release_year").value.trim() || null,
         highlight_note: document.getElementById("highlight_note").value.trim() || null,
