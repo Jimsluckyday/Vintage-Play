@@ -904,12 +904,16 @@
           item.promo_at ? `<span class="badge badge-sale">SALE</span>` : "",
         ].join(" ");
         const conditionTag = [item.condition_grade, item.completeness].filter(Boolean).join(", ");
+        const costLabel =
+          item.cost_basis !== null && item.cost_basis !== undefined
+            ? `Cost $${Number(item.cost_basis).toFixed(2)}`
+            : `<span style="color:#c2452f;font-weight:700;">No cost set</span>`;
         row.innerHTML = `
           ${photo ? `<img src="${photo}" alt="" data-zoom-photo="${photo}" />` : `<div class="no-photo" style="width:110px;height:110px;">No photo</div>`}
           <div class="info">
             <h4>${escapeHtml(item.title)} <span class="meta">(${categoryLabel(item.category)})</span> ${badges}</h4>
             <div class="meta" style="font-weight:600;color:#333;">${conditionTag ? escapeHtml(conditionTag) : "No condition set"}${item.variant_group ? ` &middot; group: ${escapeHtml(item.variant_group)}` : ""}${item.condition_notes ? ` &mdash; ${escapeHtml(item.condition_notes)}` : ""}</div>
-            <div class="meta">$${Number(item.asking_price).toFixed(2)} &middot; Qty ${item.quantity} &middot; ${item.status}${item.price_checked_at ? ` &middot; Price checked ${new Date(item.price_checked_at).toLocaleDateString()}` : ""}</div>
+            <div class="meta">$${Number(item.asking_price).toFixed(2)} &middot; ${costLabel} &middot; Qty ${item.quantity} &middot; ${item.status}${item.price_checked_at ? ` &middot; Price checked ${new Date(item.price_checked_at).toLocaleDateString()}` : ""}</div>
             <div class="btn-row">
               <button class="btn secondary" data-action="edit" data-id="${item.id}">Edit</button>
               <button class="btn danger" data-action="delete" data-id="${item.id}">Delete</button>
