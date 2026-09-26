@@ -121,6 +121,9 @@
         <option value="Used">Used</option>
       </select>
 
+      <label for="completeness">Completeness (optional — short, shown right on the card next to Condition. E.g. "Complete in Box", "Box, No Manual", "Cartridge Only" — lets buyers tell apart two listings of the same title at a glance)</label>
+      <input type="text" id="completeness" maxlength="30" />
+
       <label for="release_year">Age / Year Released (as close as you can get, e.g. "1981" or "early 1990s")</label>
       <input type="text" id="release_year" />
 
@@ -1008,6 +1011,7 @@
       populateItemTypeSelect();
       document.getElementById("item_type").value = item.item_type || "";
       document.getElementById("condition_grade").value = item.condition_grade || "";
+      document.getElementById("completeness").value = item.completeness || "";
       document.getElementById("release_year").value = item.release_year || "";
       document.getElementById("highlight_note").value = item.highlight_note || "";
       document.getElementById("condition_notes").value = item.condition_notes || "";
@@ -1034,6 +1038,7 @@
       populateItemTypeSelect();
       document.getElementById("item_type").value = "";
       document.getElementById("condition_grade").value = "";
+      document.getElementById("completeness").value = "";
       document.getElementById("release_year").value = "";
       document.getElementById("highlight_note").value = "";
       document.getElementById("condition_notes").value = "";
@@ -1074,6 +1079,7 @@
         brand: document.getElementById("brand").value || null,
         item_type: document.getElementById("item_type").value || null,
         condition_grade: document.getElementById("condition_grade").value || null,
+        completeness: document.getElementById("completeness").value.trim() || null,
         release_year: document.getElementById("release_year").value.trim() || null,
         highlight_note: document.getElementById("highlight_note").value.trim() || null,
         condition_notes: document.getElementById("condition_notes").value.trim(),
@@ -1226,7 +1232,7 @@
 
     function buildListingText(item) {
       const detailLines = [
-        item.condition_grade ? `Condition: ${item.condition_grade}` : "",
+        item.condition_grade ? `Condition: ${item.condition_grade}${item.completeness ? `, ${item.completeness}` : ""}` : "",
         item.release_year ? `Age: ${item.release_year}` : "",
         item.description || "",
         item.condition_notes ? `Condition notes: ${item.condition_notes}` : "",

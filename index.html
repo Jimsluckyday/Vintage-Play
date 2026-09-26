@@ -557,7 +557,11 @@
       categoryGridEl.hidden = !showingCategoryTiles;
       brandGridEl.hidden = !showingBrandTiles;
       treeEl.hidden = !showingTree;
-      gridEl.hidden = !showingFlatList;
+      // The flat item listing is always the compact text-row style now, even
+      // for items with a photo — #grid (the photo-tile layout) is only used by
+      // the category/brand/new-arrivals tile views above, never here, so it
+      // stays hidden through this whole branch.
+      gridEl.hidden = true;
       listEl.hidden = !showingFlatList;
       backBtn.hidden = !(activeCategory !== "all" && !dropdownStyle && !treeStyle && categoryBrands.length > 0 && (activeBrand || searching));
       treeBackBtn.hidden = !(activeCategory !== "all" && treeStyle && leafSelected && !searching);
@@ -678,21 +682,10 @@
         })
       );
 
-      const withPhotos = items.filter((item) => item.photo_urls && item.photo_urls[0]);
-      const withoutPhotos = items.filter((item) => !(item.photo_urls && item.photo_urls[0]));
-
-      gridEl.innerHTML = "";
       listEl.innerHTML = "";
       emptyNote.hidden = items.length > 0;
 
-      withPhotos.forEach((item) => {
-        const card = document.createElement("div");
-        card.className = "card";
-        card.innerHTML = buildCardInnerHtml(item);
-        gridEl.appendChild(card);
-      });
-
-      withoutPhotos.forEach((item) => {
+      items.forEach((item) => {
         const row = document.createElement("div");
         row.className = "list-row";
         row.innerHTML = buildListRowInnerHtml(item);
@@ -711,7 +704,21 @@
 
     function itemTagLabel(item) {
       const brand = brandTagLabel(item.brand);
+      // Once already browsing inside a single category, repeating its name on
+      // every row is dead weight — drop it so the brand/platform (the part
+      // that actually varies row to row) stands out instead. Still show the
+      // category when items from multiple categories are mixed together (the
+      // "All" landing view's search results).
+      if (activeCategory !== "all" && brand) return brand;
       return brand ? `${categoryLabel(item.category)} &middot; ${brand}` : categoryLabel(item.category);
+    }
+
+    // "Used, Complete in Box" / "Used, Cartridge Only" / "New" — lets a buyer
+    // tell two listings of the same title apart at a glance when they differ
+    // in completeness, without opening Details. `completeness` is a short free
+    // -text field (e.g. "Complete in Box", "Box, No Manual", "Cartridge Only").
+    function conditionTagLabel(item) {
+      return [item.condition_grade, item.completeness].filter(Boolean).join(", ");
     }
 
     function buildCardInnerHtml(item) {
@@ -738,8 +745,10 @@
     }
 
     function buildListRowInnerHtml(item) {
+      const conditionLabel = conditionTagLabel(item);
       return `
         <span class="tag">${itemTagLabel(item)}</span>
+        ${conditionLabel ? `<span class="tag-condition">${escapeHtml(conditionLabel)}</span>` : ""}
         ${item.condition_grade === "New" ? `<span class="badge badge-new">NEW</span>` : ""}
         ${item.highlight_note ? `<span class="badge badge-highlight">${escapeHtml(item.highlight_note)}</span>` : ""}
         ${item.promo_at ? `<span class="badge badge-sale">SALE</span>` : ""}
@@ -851,7 +860,7 @@
 
       const conditionEl = document.getElementById("lbCondition");
       conditionEl.hidden = !item.condition_grade;
-      conditionEl.textContent = item.condition_grade ? `Condition: ${item.condition_grade}` : "";
+      conditionEl.textContent = item.condition_grade ? `Condition: ${conditionTagLabel(item)}` : "";
 
       const ageEl = document.getElementById("lbAge");
       ageEl.hidden = !item.release_year;

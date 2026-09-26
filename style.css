@@ -456,6 +456,17 @@ main {
   flex-shrink: 0;
 }
 
+.tag-condition {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.15rem 0.5rem;
+  flex-shrink: 0;
+}
+
 .list-row-title {
   flex: 1;
   min-width: 150px;
