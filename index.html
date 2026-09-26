@@ -700,12 +700,26 @@
       });
     }
 
+    // "Sega Genesis" instead of just "Genesis" — combining the group (manufacturer)
+    // with the subcategory label so it's recognizable on its own, with or without
+    // a photo, especially in the no-photo compact list view.
+    function brandTagLabel(slug) {
+      const b = ALL_BRANDS.find((x) => x.slug === slug);
+      if (!b) return null;
+      return b.group_label ? `${b.group_label} ${b.label}` : b.label;
+    }
+
+    function itemTagLabel(item) {
+      const brand = brandTagLabel(item.brand);
+      return brand ? `${categoryLabel(item.category)} &middot; ${brand}` : categoryLabel(item.category);
+    }
+
     function buildCardInnerHtml(item) {
       const photo = item.photo_urls && item.photo_urls[0];
       return `
         ${photo ? `<img src="${photo}" alt="${escapeHtml(item.title)}" data-item-id="${item.id}" />` : `<div class="no-photo">No photo</div>`}
         <div class="card-body">
-          <span class="tag">${categoryLabel(item.category)}</span>
+          <span class="tag">${itemTagLabel(item)}</span>
           ${item.condition_grade === "New" ? `<span class="badge badge-new" style="align-self:flex-start;">NEW</span>` : ""}
           ${item.highlight_note ? `<span class="badge badge-highlight" style="align-self:flex-start;">${escapeHtml(item.highlight_note)}</span>` : ""}
           ${item.promo_at ? `<span class="badge badge-sale" style="align-self:flex-start;">SALE</span>` : ""}
@@ -725,7 +739,7 @@
 
     function buildListRowInnerHtml(item) {
       return `
-        <span class="tag">${categoryLabel(item.category)}</span>
+        <span class="tag">${itemTagLabel(item)}</span>
         ${item.condition_grade === "New" ? `<span class="badge badge-new">NEW</span>` : ""}
         ${item.highlight_note ? `<span class="badge badge-highlight">${escapeHtml(item.highlight_note)}</span>` : ""}
         ${item.promo_at ? `<span class="badge badge-sale">SALE</span>` : ""}
