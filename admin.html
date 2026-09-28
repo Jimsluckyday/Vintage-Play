@@ -196,6 +196,7 @@
         <label style="display:flex;align-items:center;gap:0.35rem;margin:0;font-weight:400;">
           <input type="checkbox" id="inventoryPhotoFilter" style="width:auto;" /> Only items with a photo
         </label>
+        <button type="button" class="btn secondary" id="inventoryPromoFilterBtn">Show Sale/Featured Only</button>
       </div>
       <p class="hint" id="inventoryFilterNote"></p>
       <div id="itemList"></div>
@@ -645,6 +646,14 @@
     document.getElementById("inventorySearch").addEventListener("input", resetInventoryPaging);
     document.getElementById("inventoryCategoryFilter").addEventListener("change", resetInventoryPaging);
     document.getElementById("inventoryPhotoFilter").addEventListener("change", resetInventoryPaging);
+    document.getElementById("inventoryPromoFilterBtn").addEventListener("click", () => {
+      promoFilterOnly = !promoFilterOnly;
+      document.getElementById("inventoryPromoFilterBtn").textContent = promoFilterOnly
+        ? "Show All Items"
+        : "Show Sale/Featured Only";
+      document.getElementById("inventoryPromoFilterBtn").classList.toggle("active", promoFilterOnly);
+      resetInventoryPaging();
+    });
     document.getElementById("inventoryLoadMoreBtn").addEventListener("click", () => {
       inventoryPagesShown++;
       renderItemList();
@@ -803,6 +812,7 @@
 
     const INVENTORY_PAGE_SIZE = 100;
     let inventoryPagesShown = 1;
+    let promoFilterOnly = false;
 
     function populateInventoryCategoryFilter() {
       const select = document.getElementById("inventoryCategoryFilter");
@@ -894,7 +904,8 @@
         const matchesSearch = !searchTerm || item.title.toLowerCase().includes(searchTerm);
         const matchesCategory = categoryFilter === "all" || item.category === categoryFilter;
         const matchesPhoto = !photoOnly || (item.photo_urls && item.photo_urls.length > 0);
-        return matchesSearch && matchesCategory && matchesPhoto;
+        const matchesPromo = !promoFilterOnly || item.featured_at || item.promo_at;
+        return matchesSearch && matchesCategory && matchesPhoto && matchesPromo;
       });
 
       const pageLimit = INVENTORY_PAGE_SIZE * inventoryPagesShown;
