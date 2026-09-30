@@ -177,6 +177,14 @@
     let activeLetter = null;
     let activeSort = "title";
 
+    // "Rare Finds" is a pseudo-category (not a real row in the categories
+    // table) -- picking it shows a flat, price-sorted list spanning every
+    // category, filtered to RARE_THRESHOLD and up, instead of one category's
+    // items. RARE_THRESHOLD also drives the RARE badge shown anywhere an
+    // item appears on the site, independent of whether this view is open.
+    const RARE_SLUG = "__rare__";
+    const RARE_THRESHOLD = 50;
+
     function resetDrilldown() {
       activeBrand = null;
       activeItemType = null;
@@ -212,11 +220,19 @@
         { slug: "all", label: "All" },
         ...ALL_CATEGORIES.map((c) => ({ slug: c.slug, label: c.label })),
       ];
+      // Placed right after Video Games specifically (not just appended) so it
+      // stays next to it even if the category list's order changes later.
+      const gamesIndex = options.findIndex((o) => o.slug === "games");
+      const rareOption = { slug: RARE_SLUG, label: "Rare Finds", rare: true };
+      options.splice(gamesIndex === -1 ? options.length : gamesIndex + 1, 0, rareOption);
+
       filtersEl.innerHTML = "";
       options.forEach((opt) => {
         const btn = document.createElement("button");
         btn.textContent = opt.label;
-        btn.className = opt.slug === activeCategory ? "active" : "";
+        btn.className = [opt.slug === activeCategory ? "active" : "", opt.rare ? "rare-finds" : ""]
+          .filter(Boolean)
+          .join(" ");
         btn.addEventListener("click", () => {
           activeCategory = opt.slug;
           resetDrilldown();
@@ -569,6 +585,7 @@
       // Until then, tree-style categories show the collapsed browse tree instead
       // of a flat list or tiles.
       const leafSelected = treeStyle && activeItemType !== null;
+      const isRareView = activeCategory === RARE_SLUG;
 
       // Top level ("All"): category tiles, unless a search is active — then a global flat search.
       // (The letter bar itself is left off this top-level view on purpose — see below.)
@@ -589,6 +606,7 @@
       // stays hidden through this whole branch.
       gridEl.hidden = true;
       listEl.hidden = !showingFlatList;
+      document.getElementById("sortSelect").hidden = !showingFlatList || isRareView;
       document.getElementById("sortSelect").hidden = !showingFlatList;
       backBtn.hidden = !(activeCategory !== "all" && !dropdownStyle && !treeStyle && categoryBrands.length > 0 && (activeBrand || searching));
       treeBackBtn.hidden = !(activeCategory !== "all" && treeStyle && leafSelected && !searching);
@@ -681,8 +699,10 @@
       }
 
       // Flat listing: global search (activeCategory "all"), a category with no brands,
-      // drilled into a specific brand or tree leaf, or a search/letter overriding a tile view.
+      // drilled into a specific brand or tree leaf, a search/letter overriding a tile
+      // view, or Rare Finds (every category at once, filtered to RARE_THRESHOLD+).
       const scopedItems = allItems.filter((item) => {
+        if (isRareView) return Number(item.asking_price) >= RARE_THRESHOLD;
         if (activeCategory !== "all" && item.category !== activeCategory) return false;
         if (leafSelected) {
           const itemTypesKnown = new Set(itemTypesForCategory(activeCategory).map((t) => t.slug));
@@ -707,7 +727,7 @@
           const matchesLetter = !activeLetter || item.title.trim()[0]?.toUpperCase() === activeLetter;
           return matchesSearch && matchesLetter;
         }),
-        activeSort
+        isRareView ? "price-desc" : activeSort
       );
 
       listEl.innerHTML = "";
@@ -716,11 +736,14 @@
       // Items sharing a variant_group (same title/listing, different
       // condition + price — e.g. 3 copies of one game in different shape)
       // render as a single "Starts at $X" row instead of one row each.
-      // Preserve the existing title sort order; just skip a group's later
-      // members once its first one has already produced the combined row.
+      // Preserve the existing sort order; just skip a group's later members
+      // once its first one has already produced the combined row. Skipped
+      // entirely in Rare Finds -- a group's combined price can be below
+      // RARE_THRESHOLD even when the specific variant that qualified it
+      // isn't, so each qualifying copy gets its own row there instead.
       const seenGroups = new Set();
       items.forEach((item) => {
-        if (item.variant_group) {
+        if (item.variant_group && !isRareView) {
           if (seenGroups.has(item.variant_group)) return;
           seenGroups.add(item.variant_group);
           const variants = items.filter((i) => i.variant_group === item.variant_group);
@@ -745,6 +768,7 @@
       return `
         <span class="tag">${itemTagLabel(first)}</span>
         <span class="tag-condition">${variants.length} condition options</span>
+        ${minPrice >= RARE_THRESHOLD ? `<span class="badge badge-rare">RARE</span>` : ""}
         <span class="list-row-title">${escapeHtml(first.title)}</span>
         <span class="price">Starts at $${minPrice.toFixed(2)}</span>
         <button type="button" class="btn-link" data-group-details="${first.variant_group}">Details</button>
@@ -766,8 +790,9 @@
       // every row is dead weight — drop it so the brand/platform (the part
       // that actually varies row to row) stands out instead. Still show the
       // category when items from multiple categories are mixed together (the
-      // "All" landing view's search results).
-      if (activeCategory !== "all" && brand) return brand;
+      // "All" landing view's search results, and Rare Finds, which spans
+      // every category the same way).
+      if (activeCategory !== "all" && activeCategory !== RARE_SLUG && brand) return brand;
       return brand ? `${categoryLabel(item.category)} &middot; ${brand}` : categoryLabel(item.category);
     }
 
@@ -788,6 +813,7 @@
           ${item.condition_grade === "New" ? `<span class="badge badge-new" style="align-self:flex-start;">NEW</span>` : ""}
           ${item.highlight_note ? `<span class="badge badge-highlight" style="align-self:flex-start;">${escapeHtml(item.highlight_note)}</span>` : ""}
           ${item.promo_at ? `<span class="badge badge-sale" style="align-self:flex-start;">SALE</span>` : ""}
+          ${Number(item.asking_price) >= RARE_THRESHOLD ? `<span class="badge badge-rare" style="align-self:flex-start;">RARE</span>` : ""}
           <h3>${escapeHtml(item.title)}</h3>
           <div class="card-bottom">
             <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
@@ -810,6 +836,7 @@
         ${item.condition_grade === "New" ? `<span class="badge badge-new">NEW</span>` : ""}
         ${item.highlight_note ? `<span class="badge badge-highlight">${escapeHtml(item.highlight_note)}</span>` : ""}
         ${item.promo_at ? `<span class="badge badge-sale">SALE</span>` : ""}
+        ${Number(item.asking_price) >= RARE_THRESHOLD ? `<span class="badge badge-rare">RARE</span>` : ""}
         <span class="list-row-title">${escapeHtml(item.title)}</span>
         <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
         <span class="status ${item.status}">${item.status === "available" ? "" : item.status.toUpperCase()}</span>

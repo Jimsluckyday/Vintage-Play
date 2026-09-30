@@ -7,6 +7,7 @@
   --mustard: #e2a63b;
   --teal: #2f7d78;
   --line: #d8c7a8;
+  --rare-purple: #6b3fa0;
 }
 
 * { box-sizing: border-box; }
@@ -96,6 +97,20 @@ main {
   background: var(--mustard);
   border-color: var(--ink);
   color: var(--ink);
+}
+
+/* Stays purple whether selected or not -- the point is to stand out from the
+   ordinary category pills at a glance, not to blend in until clicked. */
+.filters button.rare-finds {
+  background: var(--rare-purple);
+  border-color: var(--rare-purple);
+  color: #fff;
+}
+
+.filters button.rare-finds.active {
+  background: var(--rare-purple);
+  border-color: var(--ink);
+  color: #fff;
 }
 
 .grid {
@@ -1061,6 +1076,7 @@ button {
 .badge-new { background: var(--teal); color: #fff; }
 .badge-sale { background: var(--brick); color: #fff; }
 .badge-highlight { background: var(--mustard); color: var(--ink); border: 2px solid var(--ink); }
+.badge-rare { background: var(--rare-purple); color: #fff; }
 
 .qty-note {
   font-size: 0.75rem;
