@@ -112,6 +112,11 @@
         </div>
       </div>
       <input type="text" id="itemSearch" placeholder="Search titles..." />
+      <select id="sortSelect">
+        <option value="title">Title (A-Z)</option>
+        <option value="price-asc">Price: Low to High</option>
+        <option value="price-desc">Price: High to Low</option>
+      </select>
       <div class="letter-bar" id="letterBar"></div>
     </div>
     <div id="newArrivalsSection" hidden>
@@ -170,6 +175,7 @@
     let activeItemType = null;
     let searchTerm = "";
     let activeLetter = null;
+    let activeSort = "title";
 
     function resetDrilldown() {
       activeBrand = null;
@@ -521,8 +527,28 @@
       },
     });
 
-    function sortByTitle(items) {
-      return [...items].sort((a, b) => a.title.localeCompare(b.title));
+    // A variant-group row shows one combined "Starts at $X" price (the group's
+    // lowest available asking price -- see buildGroupRowInnerHtml), so a price
+    // sort has to key every member of the group by that same representative
+    // price rather than its own, or the group's row would land somewhere that
+    // doesn't match the number printed on it.
+    function sortItems(list, mode) {
+      const priceOf = (item) => {
+        if (!item.variant_group) return Number(item.asking_price);
+        const variants = list.filter((i) => i.variant_group === item.variant_group);
+        const available = variants.filter((v) => v.status === "available");
+        const source = available.length ? available : variants;
+        return Math.min(...source.map((v) => Number(v.asking_price)));
+      };
+      const sorted = [...list];
+      if (mode === "price-asc") {
+        sorted.sort((a, b) => priceOf(a) - priceOf(b) || a.title.localeCompare(b.title));
+      } else if (mode === "price-desc") {
+        sorted.sort((a, b) => priceOf(b) - priceOf(a) || a.title.localeCompare(b.title));
+      } else {
+        sorted.sort((a, b) => a.title.localeCompare(b.title));
+      }
+      return sorted;
     }
 
     function renderGrid() {
@@ -563,6 +589,7 @@
       // stays hidden through this whole branch.
       gridEl.hidden = true;
       listEl.hidden = !showingFlatList;
+      document.getElementById("sortSelect").hidden = !showingFlatList;
       backBtn.hidden = !(activeCategory !== "all" && !dropdownStyle && !treeStyle && categoryBrands.length > 0 && (activeBrand || searching));
       treeBackBtn.hidden = !(activeCategory !== "all" && treeStyle && leafSelected && !searching);
       if (!treeBackBtn.hidden) treeBackBtn.textContent = `← Back to ${categoryLabel(activeCategory)}`;
@@ -674,12 +701,13 @@
       renderLetterBar(scopedItems);
 
       const term = searchTerm.trim().toLowerCase();
-      const items = sortByTitle(
+      const items = sortItems(
         scopedItems.filter((item) => {
           const matchesSearch = !term || item.title.toLowerCase().includes(term);
           const matchesLetter = !activeLetter || item.title.trim()[0]?.toUpperCase() === activeLetter;
           return matchesSearch && matchesLetter;
-        })
+        }),
+        activeSort
       );
 
       listEl.innerHTML = "";
@@ -844,6 +872,11 @@
     document.getElementById("itemSearch").addEventListener("input", (e) => {
       searchTerm = e.target.value;
       activeLetter = null;
+      renderGrid();
+    });
+
+    document.getElementById("sortSelect").addEventListener("change", (e) => {
+      activeSort = e.target.value;
       renderGrid();
     });
 

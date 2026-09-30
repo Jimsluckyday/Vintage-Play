@@ -193,11 +193,16 @@
       <div class="btn-row">
         <input type="text" id="inventorySearch" placeholder="Search by title..." style="max-width:300px;" />
         <select id="inventoryCategoryFilter" style="max-width:220px;"></select>
+        <select id="inventorySortSelect" style="max-width:180px;">
+          <option value="created_at">Newest First</option>
+          <option value="title">Title (A-Z)</option>
+        </select>
         <label style="display:flex;align-items:center;gap:0.35rem;margin:0;font-weight:400;">
           <input type="checkbox" id="inventoryPhotoFilter" style="width:auto;" /> Only items with a photo
         </label>
         <button type="button" class="btn secondary" id="inventoryPromoFilterBtn">Show Sale/Featured Only</button>
       </div>
+      <div class="btn-row" id="inventoryLetterBar" style="margin-top:0.5rem;"></div>
       <p class="hint" id="inventoryFilterNote"></p>
       <div id="itemList"></div>
       <button class="btn secondary" id="inventoryLoadMoreBtn" hidden>Load 100 More</button>
@@ -209,6 +214,7 @@
   <script src="/config.js"></script>
   <script>
     let items = [];
+    let sales = [];
     let editingId = null;
     let editingPhotoUrls = [];
 
@@ -646,6 +652,10 @@
     document.getElementById("inventorySearch").addEventListener("input", resetInventoryPaging);
     document.getElementById("inventoryCategoryFilter").addEventListener("change", resetInventoryPaging);
     document.getElementById("inventoryPhotoFilter").addEventListener("change", resetInventoryPaging);
+    document.getElementById("inventorySortSelect").addEventListener("change", (e) => {
+      inventorySort = e.target.value;
+      resetInventoryPaging();
+    });
     document.getElementById("inventoryPromoFilterBtn").addEventListener("click", () => {
       promoFilterOnly = !promoFilterOnly;
       document.getElementById("inventoryPromoFilterBtn").textContent = promoFilterOnly
@@ -692,8 +702,21 @@
     function showAdmin() {
       loginView.hidden = true;
       adminView.hidden = false;
-      loadItems();
+      loadSales().then(loadItems);
       loadOrders();
+    }
+
+    async function loadSales() {
+      const { data, error } = await supabaseClient
+        .from("sales")
+        .select("*")
+        .order("sold_at", { ascending: false });
+      if (error) {
+        console.error("Couldn't load sales:", error.message);
+        sales = [];
+        return;
+      }
+      sales = data;
     }
 
     async function loadOrders() {
@@ -813,6 +836,8 @@
     const INVENTORY_PAGE_SIZE = 100;
     let inventoryPagesShown = 1;
     let promoFilterOnly = false;
+    let inventorySort = "created_at";
+    let inventoryLetterFilter = null;
 
     function populateInventoryCategoryFilter() {
       const select = document.getElementById("inventoryCategoryFilter");
@@ -834,7 +859,6 @@
     // pagination-narrowed list below, so it stays a true running total.
     function renderInventorySummary() {
       const inStock = items.filter((i) => i.status !== "sold");
-      const sold = items.filter((i) => i.status === "sold");
 
       const qtyOf = (i) => Number(i.quantity) || 0;
       const valueOf = (i) => (Number(i.asking_price) || 0) * qtyOf(i);
@@ -848,9 +872,14 @@
       const stockValue = sum(inStock, valueOf);
       const stockCost = sum(inStock, costOf);
       const stockProfit = stockValue - stockCost;
-      const soldQty = sum(sold, qtyOf);
-      const soldValue = sum(sold, valueOf);
-      const soldCost = sum(sold, costOf);
+
+      // Sold-to-date figures come from the sales log (actual recorded price per
+      // transaction, which a Kijiji/FB sale often negotiates away from asking
+      // price) rather than from item.status -- that also makes a partial-quantity
+      // sale (2 of 5 copies) count correctly instead of all-or-nothing.
+      const soldQty = sales.reduce((t, s) => t + (Number(s.quantity) || 0), 0);
+      const soldValue = sales.reduce((t, s) => t + (Number(s.quantity) || 0) * (Number(s.price_each) || 0), 0);
+      const soldCost = sales.reduce((t, s) => t + (Number(s.quantity) || 0) * (Number(s.cost_basis_each) || 0), 0);
       const soldProfit = soldValue - soldCost;
       const missingCostCount = items.filter((i) => i.cost_basis === null || i.cost_basis === undefined).length;
 
@@ -892,6 +921,43 @@
       `;
     }
 
+    // Quick jump/filter to a starting letter -- mainly so it's easy to see where
+    // you left off adding photos when working through inventory alphabetically.
+    // Built from the search/category/photo/promo-filtered set, before the letter
+    // filter itself is applied, so every reachable letter stays clickable.
+    function renderInventoryLetterBar(scopedItems) {
+      const barEl = document.getElementById("inventoryLetterBar");
+      const available = new Set(
+        scopedItems.map((item) => item.title.trim()[0]?.toUpperCase()).filter(Boolean)
+      );
+      barEl.innerHTML = "";
+
+      const allBtn = document.createElement("button");
+      allBtn.type = "button";
+      allBtn.className = "btn secondary" + (!inventoryLetterFilter ? " active" : "");
+      allBtn.textContent = "All";
+      allBtn.addEventListener("click", () => {
+        inventoryLetterFilter = null;
+        resetInventoryPaging();
+      });
+      barEl.appendChild(allBtn);
+
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".split("").forEach((letter) => {
+        const has = letter === "#" ? [...available].some((l) => !/[A-Z]/.test(l)) : available.has(letter);
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn secondary" + (inventoryLetterFilter === letter ? " active" : "");
+        btn.textContent = letter;
+        btn.disabled = !has;
+        btn.style.padding = "0.3rem 0.55rem";
+        btn.addEventListener("click", () => {
+          inventoryLetterFilter = letter;
+          resetInventoryPaging();
+        });
+        barEl.appendChild(btn);
+      });
+    }
+
     function renderItemList() {
       renderInventorySummary();
       document.getElementById("itemCount").textContent = items.length;
@@ -900,13 +966,28 @@
       const categoryFilter = document.getElementById("inventoryCategoryFilter").value;
       const photoOnly = document.getElementById("inventoryPhotoFilter").checked;
 
-      const filtered = items.filter((item) => {
+      const preLetter = items.filter((item) => {
         const matchesSearch = !searchTerm || item.title.toLowerCase().includes(searchTerm);
         const matchesCategory = categoryFilter === "all" || item.category === categoryFilter;
         const matchesPhoto = !photoOnly || (item.photo_urls && item.photo_urls.length > 0);
         const matchesPromo = !promoFilterOnly || item.featured_at || item.promo_at;
         return matchesSearch && matchesCategory && matchesPhoto && matchesPromo;
       });
+
+      renderInventoryLetterBar(preLetter);
+
+      const filtered = preLetter.filter((item) => {
+        if (!inventoryLetterFilter) return true;
+        const first = item.title.trim()[0]?.toUpperCase() || "";
+        if (inventoryLetterFilter === "#") return !/[A-Z]/.test(first);
+        return first === inventoryLetterFilter;
+      });
+
+      if (inventorySort === "title") {
+        filtered.sort((a, b) => a.title.localeCompare(b.title));
+      }
+      // "created_at" needs no client-side sort -- items[] already arrives in
+      // that order from loadItems()'s query.
 
       const pageLimit = INVENTORY_PAGE_SIZE * inventoryPagesShown;
       const shown = filtered.slice(0, pageLimit);
@@ -942,6 +1023,7 @@
             <div class="btn-row">
               <button class="btn secondary" data-action="edit" data-id="${item.id}">Edit</button>
               <button class="btn danger" data-action="delete" data-id="${item.id}">Delete</button>
+              ${Number(item.quantity) > 0 ? `<button class="btn" data-action="sell" data-id="${item.id}">Sell (Offline)</button>` : ""}
               <button class="btn secondary" data-action="listing" data-id="${item.id}">Generate Listing Text</button>
               <button class="btn secondary" data-action="toggle-featured" data-id="${item.id}">${item.featured_at ? "Unfeature" : "Feature as New"}</button>
               <button class="btn secondary" data-action="toggle-promo" data-id="${item.id}">${item.promo_at ? "Remove from Sale" : "Mark on Sale"}</button>
@@ -967,6 +1049,9 @@
       );
       listEl.querySelectorAll('[data-action="delete"]').forEach((btn) =>
         btn.addEventListener("click", () => deleteItem(btn.dataset.id))
+      );
+      listEl.querySelectorAll('[data-action="sell"]').forEach((btn) =>
+        btn.addEventListener("click", () => sellItem(btn.dataset.id))
       );
       listEl.querySelectorAll('[data-action="listing"]').forEach((btn) =>
         btn.addEventListener("click", () => toggleListing(btn.dataset.id))
@@ -1327,6 +1412,76 @@
         alert(`Couldn't delete: ${error.message}`);
         return;
       }
+      await loadItems();
+    }
+
+    // Records an offline sale (Kijiji/FB/in-person -- anything that didn't go
+    // through the site's own cart) and pulls the sold quantity out of stock.
+    // A partial-quantity sale just reduces quantity and leaves the listing up;
+    // selling the last unit marks the item sold, same as the manual status field.
+    async function sellItem(id) {
+      const item = items.find((i) => i.id === id);
+      if (!item) return;
+      const maxQty = Number(item.quantity) || 0;
+      if (maxQty <= 0) {
+        alert("No units left in stock to sell for this item.");
+        return;
+      }
+
+      const qtyInput = prompt(
+        `How many "${item.title}" did you sell? (${maxQty} in stock)`,
+        String(maxQty)
+      );
+      if (qtyInput === null) return;
+      const qty = parseInt(qtyInput, 10);
+      if (!Number.isInteger(qty) || qty < 1 || qty > maxQty) {
+        alert(`Enter a whole number from 1 to ${maxQty}.`);
+        return;
+      }
+
+      const priceInput = prompt(
+        "Sale price per unit ($, CAD) -- what it actually sold for, not necessarily the asking price:",
+        Number(item.asking_price || 0).toFixed(2)
+      );
+      if (priceInput === null) return;
+      const price = parseFloat(priceInput);
+      if (!Number.isFinite(price) || price < 0) {
+        alert("Enter a valid price.");
+        return;
+      }
+
+      const channel = prompt("Where did this sell? (e.g. Kijiji, Facebook Marketplace, In Person)", "Kijiji");
+      if (channel === null) return;
+
+      const remaining = maxQty - qty;
+      const confirmMsg =
+        `Record sale: ${qty} x "${item.title}" @ $${price.toFixed(2)} each` +
+        (channel.trim() ? ` via ${channel.trim()}` : "") +
+        `?\n\n` +
+        (remaining > 0 ? `${remaining} will remain in stock.` : `This will mark the listing as sold.`);
+      if (!confirm(confirmMsg)) return;
+
+      const { error: saleError } = await supabaseClient.from("sales").insert({
+        item_id: item.id,
+        title: item.title,
+        category: item.category,
+        quantity: qty,
+        price_each: price,
+        cost_basis_each: item.cost_basis,
+        channel: channel.trim() || null,
+      });
+      if (saleError) {
+        alert(`Couldn't record sale: ${saleError.message}`);
+        return;
+      }
+
+      const updates = remaining > 0 ? { quantity: remaining } : { quantity: 0, status: "sold" };
+      const { error: itemError } = await supabaseClient.from("items").update(updates).eq("id", id);
+      if (itemError) {
+        alert(`Sale was recorded, but couldn't update inventory: ${itemError.message}`);
+      }
+
+      await loadSales();
       await loadItems();
     }
 
