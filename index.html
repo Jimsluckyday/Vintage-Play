@@ -408,8 +408,23 @@
         })
         .join("");
 
-      const heading = sectionLabel ? `<div class="subcat-picker-section-label">${escapeHtml(sectionLabel)}</div>` : "";
-      return `<div class="subcat-picker-section">${heading}${flatHtml}${groupsHtml}</div>`;
+      const body = `${flatHtml}${groupsHtml}`;
+
+      // No section label = the in-category picker, which needs no heading
+      // (you're already inside that category). With a label, this is one
+      // category's block within the cross-category "Jump to a subcategory"
+      // list -- collapsed behind its own <details> by default, same idea as
+      // the group_label sub-groups, so dozens of subcategories across many
+      // categories doesn't dump everything open at once.
+      if (!sectionLabel) return `<div class="subcat-picker-section">${body}</div>`;
+
+      const totalCount = brands.reduce((sum, b) => sum + countFor(b), 0);
+      return `
+        <details class="subcat-picker-section">
+          <summary class="subcat-picker-section-label" data-searchable>${escapeHtml(sectionLabel)} <span class="subcat-picker-count">(${totalCount})</span></summary>
+          <div class="subcat-picker-section-items">${body}</div>
+        </details>
+      `;
     }
 
     // Typing in a panel's search box hides non-matching buttons/groups and
@@ -430,7 +445,14 @@
         bodyEl.querySelectorAll(".subcat-picker-section").forEach((section) => {
           const anyVisible = [...section.querySelectorAll(".subcat-picker-item")].some((b) => !b.hidden);
           const anyGroupVisible = [...section.querySelectorAll("details.subcat-picker-group")].some((d) => !d.hidden);
-          section.hidden = !(!term || anyVisible || anyGroupVisible);
+          const anyMatch = anyVisible || anyGroupVisible;
+          section.hidden = !(!term || anyMatch);
+          // Only the cross-category picker's sections are <details> (the
+          // in-category picker's is a plain <div>, which has no .open).
+          if (section.tagName === "DETAILS") {
+            if (term && anyMatch) section.open = true;
+            if (!term) section.open = false;
+          }
         });
       });
     }

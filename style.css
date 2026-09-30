@@ -283,6 +283,37 @@ main {
   margin-top: 0;
 }
 
+/* Only applies where this label is a <summary> (the cross-category "Jump to
+   a subcategory" list) -- collapsed by default like the manufacturer-group
+   summaries below, same triangle treatment. */
+summary.subcat-picker-section-label {
+  cursor: pointer;
+  list-style: none;
+  border-radius: 6px;
+  padding: 0.35rem 0.4rem;
+}
+
+summary.subcat-picker-section-label::-webkit-details-marker { display: none; }
+
+summary.subcat-picker-section-label::before {
+  content: "\25B8";
+  display: inline-block;
+  margin-right: 0.4rem;
+  transition: transform 0.15s ease;
+}
+
+details[open] > summary.subcat-picker-section-label::before {
+  transform: rotate(90deg);
+}
+
+summary.subcat-picker-section-label:hover {
+  background: var(--bg);
+}
+
+.subcat-picker-section-items {
+  margin-left: 0.9rem;
+}
+
 .subcat-picker-item {
   display: block;
   width: 100%;
