@@ -213,6 +213,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="/config.js"></script>
   <script>
+    // Matches RARE_THRESHOLD in index.html -- what the public site's Rare
+    // Finds section and RARE badge use. Keep the two in sync if this changes.
+    const RARE_THRESHOLD = 50;
+
     let items = [];
     let sales = [];
     let editingId = null;
@@ -883,6 +887,11 @@
       const soldProfit = soldValue - soldCost;
       const missingCostCount = items.filter((i) => i.cost_basis === null || i.cost_basis === undefined).length;
 
+      // Same test as the public site's RARE badge/Rare Finds section
+      // (asking_price >= RARE_THRESHOLD), counted over in-stock listings --
+      // a quick "how many rare finds do I have right now" headline number.
+      const rareCount = inStock.filter((i) => Number(i.asking_price) >= RARE_THRESHOLD).length;
+
       const stat = (label, value) => `
         <div class="stat-tile">
           <div class="stat-value">${value}</div>
@@ -890,6 +899,7 @@
         </div>
       `;
       document.getElementById("inventoryStatGrid").innerHTML =
+        stat("Rare Finds in stock ($50+)", rareCount) +
         stat("Listings in stock", inStock.length) +
         stat("Units in stock", stockQty) +
         stat("Resale value in stock", `$${stockValue.toFixed(2)}`) +
