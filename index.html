@@ -1463,6 +1463,10 @@
             "id, title, category, brand, item_type, variant_group, condition_grade, completeness, release_year, highlight_note, description, condition_notes, asking_price, quantity, status, photo_urls, featured_at, promo_at"
           )
           .neq("status", "sold")
+          // Held back pending repair/condition work -- not ready to list yet.
+          // Not in the column list above either: like cost_basis and
+          // internal_notes, this is admin-only and should never reach here.
+          .is("on_hold_at", null)
           .order("title", { ascending: true })
           .range(offset, offset + pageSize - 1);
 

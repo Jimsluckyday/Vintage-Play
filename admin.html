@@ -201,6 +201,7 @@
           <input type="checkbox" id="inventoryPhotoFilter" style="width:auto;" /> Only items with a photo
         </label>
         <button type="button" class="btn secondary" id="inventoryPromoFilterBtn">Show Sale/Featured Only</button>
+        <button type="button" class="btn secondary" id="inventoryHoldFilterBtn">Show On Hold Only</button>
       </div>
       <div class="btn-row" id="inventoryLetterBar" style="margin-top:0.5rem;"></div>
       <p class="hint" id="inventoryFilterNote"></p>
@@ -668,6 +669,14 @@
       document.getElementById("inventoryPromoFilterBtn").classList.toggle("active", promoFilterOnly);
       resetInventoryPaging();
     });
+    document.getElementById("inventoryHoldFilterBtn").addEventListener("click", () => {
+      holdFilterOnly = !holdFilterOnly;
+      document.getElementById("inventoryHoldFilterBtn").textContent = holdFilterOnly
+        ? "Show All Items"
+        : "Show On Hold Only";
+      document.getElementById("inventoryHoldFilterBtn").classList.toggle("active", holdFilterOnly);
+      resetInventoryPaging();
+    });
     document.getElementById("inventoryLoadMoreBtn").addEventListener("click", () => {
       inventoryPagesShown++;
       renderItemList();
@@ -840,6 +849,7 @@
     const INVENTORY_PAGE_SIZE = 100;
     let inventoryPagesShown = 1;
     let promoFilterOnly = false;
+    let holdFilterOnly = false;
     let inventorySort = "created_at";
     let inventoryLetterFilter = null;
 
@@ -981,7 +991,8 @@
         const matchesCategory = categoryFilter === "all" || item.category === categoryFilter;
         const matchesPhoto = !photoOnly || (item.photo_urls && item.photo_urls.length > 0);
         const matchesPromo = !promoFilterOnly || item.featured_at || item.promo_at;
-        return matchesSearch && matchesCategory && matchesPhoto && matchesPromo;
+        const matchesHold = !holdFilterOnly || item.on_hold_at;
+        return matchesSearch && matchesCategory && matchesPhoto && matchesPromo && matchesHold;
       });
 
       renderInventoryLetterBar(preLetter);
@@ -1018,6 +1029,7 @@
         const badges = [
           item.featured_at ? `<span class="badge badge-new">NEW</span>` : "",
           item.promo_at ? `<span class="badge badge-sale">SALE</span>` : "",
+          item.on_hold_at ? `<span class="badge badge-hold">ON HOLD</span>` : "",
         ].join(" ");
         const conditionTag = [item.condition_grade, item.completeness].filter(Boolean).join(", ");
         const costLabel =
@@ -1038,6 +1050,7 @@
               <button class="btn secondary" data-action="toggle-featured" data-id="${item.id}">${item.featured_at ? "Unfeature" : "Feature as New"}</button>
               <button class="btn secondary" data-action="toggle-promo" data-id="${item.id}">${item.promo_at ? "Remove from Sale" : "Mark on Sale"}</button>
               <button class="btn secondary" data-action="toggle-price-checked" data-id="${item.id}">${item.price_checked_at ? "Clear Price-Checked" : "Mark Price Checked Today"}</button>
+              <button class="btn secondary" data-action="toggle-hold" data-id="${item.id}">${item.on_hold_at ? "Release Hold" : "Hold (Needs Repair)"}</button>
             </div>
             <div class="btn-row">
               <span class="meta" style="align-self:center;">Post to:</span>
@@ -1074,6 +1087,9 @@
       );
       listEl.querySelectorAll('[data-action="toggle-price-checked"]').forEach((btn) =>
         btn.addEventListener("click", () => toggleFlag(btn.dataset.id, "price_checked_at"))
+      );
+      listEl.querySelectorAll('[data-action="toggle-hold"]').forEach((btn) =>
+        btn.addEventListener("click", () => toggleFlag(btn.dataset.id, "on_hold_at"))
       );
       listEl.querySelectorAll('[data-action="post-ebay"]').forEach((btn) =>
         btn.addEventListener("click", () => copyListingAndOpen(btn.dataset.id, "https://www.ebay.com/sl/sell"))
