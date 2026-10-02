@@ -626,10 +626,12 @@
       // for items with a photo — #grid (the photo-tile layout) is only used by
       // the category/brand/new-arrivals tile views above, never here, so it
       // stays hidden through this whole branch.
-      gridEl.hidden = true;
-      listEl.hidden = !showingFlatList;
+      // Rare Finds uses the photo-tile grid instead of the compact text rows,
+      // to make the standout items more visually eye-catching; every other
+      // flat-list case keeps the text-row list.
+      gridEl.hidden = !(showingFlatList && isRareView);
+      listEl.hidden = !showingFlatList || isRareView;
       document.getElementById("sortSelect").hidden = !showingFlatList || isRareView;
-      document.getElementById("sortSelect").hidden = !showingFlatList;
       backBtn.hidden = !(activeCategory !== "all" && !dropdownStyle && !treeStyle && categoryBrands.length > 0 && (activeBrand || searching));
       treeBackBtn.hidden = !(activeCategory !== "all" && treeStyle && leafSelected && !searching);
       if (!treeBackBtn.hidden) treeBackBtn.textContent = `← Back to ${categoryLabel(activeCategory)}`;
@@ -752,20 +754,32 @@
         isRareView ? "price-desc" : activeSort
       );
 
-      listEl.innerHTML = "";
       emptyNote.hidden = items.length > 0;
+
+      // Rare Finds renders as photo-tile cards (like New Arrivals) rather
+      // than the compact text rows -- more visually eye-catching for a
+      // section whose whole point is to draw attention to standout items.
+      if (isRareView) {
+        gridEl.innerHTML = "";
+        items.forEach((item) => {
+          const card = document.createElement("div");
+          card.className = "card";
+          card.innerHTML = buildCardInnerHtml(item);
+          gridEl.appendChild(card);
+        });
+        return;
+      }
+
+      listEl.innerHTML = "";
 
       // Items sharing a variant_group (same title/listing, different
       // condition + price — e.g. 3 copies of one game in different shape)
       // render as a single "Starts at $X" row instead of one row each.
       // Preserve the existing sort order; just skip a group's later members
-      // once its first one has already produced the combined row. Skipped
-      // entirely in Rare Finds -- a group's combined price can be below
-      // RARE_THRESHOLD even when the specific variant that qualified it
-      // isn't, so each qualifying copy gets its own row there instead.
+      // once its first one has already produced the combined row.
       const seenGroups = new Set();
       items.forEach((item) => {
-        if (item.variant_group && !isRareView) {
+        if (item.variant_group) {
           if (seenGroups.has(item.variant_group)) return;
           seenGroups.add(item.variant_group);
           const variants = items.filter((i) => i.variant_group === item.variant_group);
