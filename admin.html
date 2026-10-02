@@ -186,6 +186,8 @@
       <h2>Inventory Summary</h2>
       <div class="stat-grid" id="inventoryStatGrid"></div>
       <table class="summary-table" id="inventoryCategoryTable"></table>
+      <h3 style="margin-top:1.25rem;">By Subcategory</h3>
+      <table class="summary-table" id="inventoryBrandTable"></table>
     </div>
 
     <div class="section">
@@ -193,6 +195,7 @@
       <div class="btn-row">
         <input type="text" id="inventorySearch" placeholder="Search by title..." style="max-width:300px;" />
         <select id="inventoryCategoryFilter" style="max-width:220px;"></select>
+        <select id="inventoryBrandFilter" style="max-width:220px;"></select>
         <select id="inventorySortSelect" style="max-width:180px;">
           <option value="created_at">Newest First</option>
           <option value="title">Title (A-Z)</option>
@@ -528,6 +531,7 @@
         await loadBrands();
         renderBrandManager();
         populateBrandSelect();
+        populateInventoryBrandFilter();
       } catch (err) {
         errorEl.textContent = err.message;
         errorEl.hidden = false;
@@ -655,7 +659,14 @@
     });
 
     document.getElementById("inventorySearch").addEventListener("input", resetInventoryPaging);
-    document.getElementById("inventoryCategoryFilter").addEventListener("change", resetInventoryPaging);
+    document.getElementById("inventoryCategoryFilter").addEventListener("change", () => {
+      // Changing category invalidates whatever subcategory was picked (it
+      // belonged to the old category's list), so rescope to "All" rather
+      // than silently keep a now-unrelated brand selected.
+      populateInventoryBrandFilter();
+      resetInventoryPaging();
+    });
+    document.getElementById("inventoryBrandFilter").addEventListener("change", resetInventoryPaging);
     document.getElementById("inventoryPhotoFilter").addEventListener("change", resetInventoryPaging);
     document.getElementById("inventorySortSelect").addEventListener("change", (e) => {
       inventorySort = e.target.value;
@@ -694,6 +705,7 @@
       await loadBrands();
       renderBrandManager();
       populateBrandSelect();
+      populateInventoryBrandFilter();
       populateNewBrandGroupSelect();
       populateItemTypeCategorySelect();
       await loadItemTypes();
@@ -862,6 +874,27 @@
       if (previousValue) select.value = previousValue;
     }
 
+    // Scoped to the current category filter so picking "PS1" vs "PS3" is a
+    // flat, two-click flow (Category: Video Games, Subcategory: PS1) instead
+    // of hunting through every brand across every category at once. With no
+    // category chosen, every brand is listed with its category for context.
+    function populateInventoryBrandFilter() {
+      const select = document.getElementById("inventoryBrandFilter");
+      const categoryFilter = document.getElementById("inventoryCategoryFilter").value || "all";
+      const previousValue = select.value;
+      const brands = categoryFilter === "all"
+        ? ALL_BRANDS
+        : ALL_BRANDS.filter((b) => b.category === categoryFilter);
+      const sorted = [...brands].sort((a, b) => a.label.localeCompare(b.label));
+      const optionLabel = (b) => (categoryFilter === "all" ? `${b.label} (${categoryLabel(b.category)})` : b.label);
+      select.innerHTML =
+        `<option value="all">All Subcategories</option>` +
+        sorted.map((b) => `<option value="${b.slug}">${escapeHtml(optionLabel(b))}</option>`).join("");
+      if (previousValue && [...select.options].some((o) => o.value === previousValue)) {
+        select.value = previousValue;
+      }
+    }
+
     function resetInventoryPaging() {
       inventoryPagesShown = 1;
       renderItemList();
@@ -939,6 +972,36 @@
           .join("")}
         <tr class="summary-total-row"><td>Total</td><td>${stockQty}</td><td>$${stockValue.toFixed(2)}</td><td>$${stockCost.toFixed(2)}</td><td>$${stockProfit.toFixed(2)}</td></tr>
       `;
+
+      // Subcategory (brand) breakdown -- e.g. PS1 vs PS3 within Video Games.
+      // Items with no brand set aren't part of any subcategory, so they're
+      // left out here rather than lumped into a misleading "Other" row; the
+      // category table above already accounts for every item regardless.
+      const byBrand = {};
+      let brandedQty = 0, brandedValue = 0, brandedCost = 0;
+      inStock.forEach((i) => {
+        if (!i.brand) return;
+        const brandMeta = ALL_BRANDS.find((b) => b.slug === i.brand);
+        const label = brandMeta ? `${brandMeta.label} (${categoryLabel(i.category)})` : `${i.brand} (${categoryLabel(i.category)})`;
+        if (!byBrand[label]) byBrand[label] = { qty: 0, value: 0, cost: 0 };
+        byBrand[label].qty += qtyOf(i);
+        byBrand[label].value += valueOf(i);
+        byBrand[label].cost += costOf(i);
+        brandedQty += qtyOf(i);
+        brandedValue += valueOf(i);
+        brandedCost += costOf(i);
+      });
+      const brandRows = Object.entries(byBrand).sort((a, b) => b[1].value - a[1].value);
+      document.getElementById("inventoryBrandTable").innerHTML = `
+        <tr><th>Subcategory</th><th>Units in stock</th><th>Resale value</th><th>Cost basis</th><th>Est. profit</th></tr>
+        ${brandRows
+          .map(
+            ([label, v]) =>
+              `<tr><td>${escapeHtml(label)}</td><td>${v.qty}</td><td>$${v.value.toFixed(2)}</td><td>$${v.cost.toFixed(2)}</td><td>$${(v.value - v.cost).toFixed(2)}</td></tr>`
+          )
+          .join("")}
+        <tr class="summary-total-row"><td>Subtotal (has a subcategory)</td><td>${brandedQty}</td><td>$${brandedValue.toFixed(2)}</td><td>$${brandedCost.toFixed(2)}</td><td>$${(brandedValue - brandedCost).toFixed(2)}</td></tr>
+      `;
     }
 
     // Quick jump/filter to a starting letter -- mainly so it's easy to see where
@@ -984,15 +1047,17 @@
 
       const searchTerm = document.getElementById("inventorySearch").value.trim().toLowerCase();
       const categoryFilter = document.getElementById("inventoryCategoryFilter").value;
+      const brandFilter = document.getElementById("inventoryBrandFilter").value || "all";
       const photoOnly = document.getElementById("inventoryPhotoFilter").checked;
 
       const preLetter = items.filter((item) => {
         const matchesSearch = !searchTerm || item.title.toLowerCase().includes(searchTerm);
         const matchesCategory = categoryFilter === "all" || item.category === categoryFilter;
+        const matchesBrand = brandFilter === "all" || item.brand === brandFilter;
         const matchesPhoto = !photoOnly || (item.photo_urls && item.photo_urls.length > 0);
         const matchesPromo = !promoFilterOnly || item.featured_at || item.promo_at;
         const matchesHold = !holdFilterOnly || item.on_hold_at;
-        return matchesSearch && matchesCategory && matchesPhoto && matchesPromo && matchesHold;
+        return matchesSearch && matchesCategory && matchesBrand && matchesPhoto && matchesPromo && matchesHold;
       });
 
       renderInventoryLetterBar(preLetter);
