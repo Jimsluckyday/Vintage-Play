@@ -183,7 +183,9 @@
     // items. RARE_THRESHOLD also drives the RARE badge shown anywhere an
     // item appears on the site, independent of whether this view is open.
     const RARE_SLUG = "__rare__";
-    const RARE_THRESHOLD = 50;
+    // 49.99, not 50: every price ends in .99 (a $50 target is listed as $49.99),
+    // and that top tier is exactly what should count as rare.
+    const RARE_THRESHOLD = 49.99;
 
     function resetDrilldown() {
       activeBrand = null;
