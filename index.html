@@ -29,7 +29,7 @@
       <p>Found this site somewhere other than one of my listings? Here's where else Vintage Play Collectables sells, and how to reach me directly.</p>
       <div class="btn-row" id="sellerProfileLinks" style="margin:0.75rem 0;"></div>
       <div class="pay-option">
-        <span>Email</span>
+        <span>Email: <a href="mailto:info@vintageplay.ca" id="contactEmailLink">info@vintageplay.ca</a></span>
         <button class="btn secondary" id="copyContactEmailBtn" style="margin-top:0;padding:0.3rem 0.7rem;font-size:0.8rem;">Copy Email</button>
       </div>
       <p class="hint" id="contactCopyStatus" style="margin-top:0.5rem;"></p>
@@ -160,7 +160,7 @@
   </div>
 
   <footer>
-    <p class="footer-callout">Interested in an item? Message me on Kijiji, Facebook Marketplace, or eBay to arrange purchase and pickup.</p>
+    <p class="footer-callout">Interested in an item? Message me on Kijiji, Facebook Marketplace, or eBay, or email <a href="mailto:info@vintageplay.ca">info@vintageplay.ca</a>, to arrange purchase and pickup.</p>
     <p class="footer-callout">Buying more than one item? I'm always happy to work out a bundle deal — just ask!</p>
     <button type="button" class="btn secondary" id="returnsToggleBtnFooter" style="margin-top:0.75rem;">Returns &amp; Warranty</button>
   </footer>
@@ -1362,7 +1362,7 @@
     });
     document.getElementById("copyContactEmailBtn").addEventListener("click", async () => {
       try {
-        await navigator.clipboard.writeText(ETRANSFER_EMAIL);
+        await navigator.clipboard.writeText(CONTACT_EMAIL);
         document.getElementById("contactCopyStatus").textContent = "Email copied.";
       } catch (e) {
         document.getElementById("contactCopyStatus").textContent = "Couldn't copy — select and copy the email manually.";

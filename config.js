@@ -1,6 +1,6 @@
 // Bump this by 1 every time this file (or admin.html/index.html) is redeployed.
 // Lets the page detect and warn if the browser is running a stale cached copy.
-const LOCAL_VERSION = "77";
+const LOCAL_VERSION = "78";
 
 // Public site URL — used in the Kijiji/FB listing generator to point buyers back to the full catalog.
 const SITE_URL = "https://www.vintageplay.ca";
@@ -32,6 +32,10 @@ const EMAILJS_TEMPLATE_ID = "template_xu2hlwo";
 
 // Where the cart's "Pay with PayPal" button sends buyers — paypal.me/<this>
 const PAYPAL_ME_HANDLE = "vintageplay";
+
+// Public contact address shown in the site's Contact panel. Forwards (Cloudflare
+// Email Routing) to the seller's sales inbox, so personal email stays private.
+const CONTACT_EMAIL = "info@vintageplay.ca";
 
 // Additional manual payment options shown in the cart's "How to Pay" section.
 const ETRANSFER_EMAIL = "Jamesherder@yahoo.ca";
