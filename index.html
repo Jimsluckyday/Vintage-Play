@@ -23,10 +23,10 @@
   <div class="cart-modal" id="contactModal" hidden>
     <div class="cart-panel">
       <div class="cart-panel-header">
-        <h2>Contact &amp; Where I Sell</h2>
+        <h2>Contact &amp; Where We Sell</h2>
         <span class="lightbox-close" id="contactCloseBtn" style="position:static;color:var(--ink);">&times;</span>
       </div>
-      <p>Found this site somewhere other than one of my listings? Here's where else Vintage Play Collectables sells, and how to reach me directly.</p>
+      <p>Found this site somewhere other than one of our listings? Here's where else Vintage Play Collectables sells, and how to reach us directly.</p>
       <div class="btn-row" id="sellerProfileLinks" style="margin:0.75rem 0;"></div>
       <div class="pay-option">
         <span>Email: <a href="mailto:info@vintageplay.ca" id="contactEmailLink">info@vintageplay.ca</a></span>
@@ -42,13 +42,13 @@
         <h2>Returns &amp; Warranty</h2>
         <span class="lightbox-close" id="returnsCloseBtn" style="position:static;color:var(--ink);">&times;</span>
       </div>
-      <p>Everything I sell is used/vintage unless a listing says otherwise, and I describe each item's condition as accurately as I can. Because these are pre-owned collectibles, here's what to expect:</p>
+      <p>Everything we sell is used/vintage unless a listing says otherwise, and we describe each item's condition as accurately as we can. Because these are pre-owned collectibles, here's what to expect:</p>
       <ul style="margin:0.75rem 0; padding-left:1.2rem; line-height:1.6;">
         <li><strong>Local pickup:</strong> Please look over the item before you pay — once you've paid and taken it home, the sale is final.</li>
-        <li><strong>Consoles, games, and electronics:</strong> These are tested before listing, but occasionally something doesn't show up right away (a disc that skips, a console issue that wasn't apparent in testing). If that happens, message me within 7 days of pickup/delivery and I'll work with you on a repair, replacement, or partial refund.</li>
-        <li><strong>Shipped items:</strong> If something arrives significantly different than described, or was damaged in transit, message me within 3 days of delivery and I'll make it right.</li>
+        <li><strong>Consoles, games, and electronics:</strong> These are tested before listing, but occasionally something doesn't show up right away (a disc that skips, a console issue that wasn't apparent in testing). If that happens, message us within 7 days of pickup/delivery and we'll work with you on a repair, replacement, or partial refund.</li>
+        <li><strong>Shipped items:</strong> If something arrives significantly different than described, or was damaged in transit, message us within 3 days of delivery and we'll make it right.</li>
         <li>No returns for buyer's remorse, or once an item's been used beyond what's needed to check it works.</li>
-        <li>All returns and refunds are at my discretion. I want to be fair, but I reserve the right to decline a request if I feel the situation doesn't warrant one.</li>
+        <li>All returns and refunds are at our discretion. We want to be fair, but we reserve the right to decline a request if we feel the situation doesn't warrant one.</li>
       </ul>
     </div>
   </div>
@@ -62,7 +62,7 @@
       <div id="cartItems"></div>
       <p class="empty-note" id="cartEmptyNote" hidden>Your cart is empty.</p>
       <div class="cart-total">Total: $<span id="cartTotal">0.00</span></div>
-      <p class="hint">This isn't an automatic checkout — sending a request lets me know what you're after so we can arrange payment and pickup/shipping together.</p>
+      <p class="hint">This isn't an automatic checkout — sending a request lets us know what you're after so we can arrange payment and pickup/shipping together.</p>
       <button type="button" class="btn-link" id="returnsToggleBtnCart">Returns &amp; Warranty policy</button>
 
       <div class="section" style="padding:0;margin:0.75rem 0;">
@@ -160,8 +160,8 @@
   </div>
 
   <footer>
-    <p class="footer-callout">Interested in an item? Message me on Kijiji, Facebook Marketplace, or eBay, or email <a href="mailto:info@vintageplay.ca">info@vintageplay.ca</a>, to arrange purchase and pickup.</p>
-    <p class="footer-callout">Buying more than one item? I'm always happy to work out a bundle deal — just ask!</p>
+    <p class="footer-callout">Interested in an item? Message us on Kijiji, Facebook Marketplace, or eBay, or email <a href="mailto:info@vintageplay.ca">info@vintageplay.ca</a>, to arrange purchase and pickup.</p>
+    <p class="footer-callout">Buying more than one item? We're always happy to work out a bundle deal — just ask!</p>
     <button type="button" class="btn secondary" id="returnsToggleBtnFooter" style="margin-top:0.75rem;">Returns &amp; Warranty</button>
   </footer>
 
@@ -1433,9 +1433,9 @@
 
       btn.disabled = false;
       if (dbError && emailOk) {
-        statusEl.textContent = "Request sent by email, but couldn't save to the order log — let the seller know just in case.";
+        statusEl.textContent = "Request sent by email, but couldn't save to the order log — let us know just in case.";
       } else if (dbError && !emailOk) {
-        statusEl.textContent = "Something went wrong sending this — please copy the summary above and message the seller directly.";
+        statusEl.textContent = "Something went wrong sending this — please copy the summary above and message us directly.";
       } else if (!emailOk) {
         statusEl.textContent = "Request recorded! (Email notification failed, but it's saved.) Summary also copied to your clipboard.";
       } else {

@@ -1,6 +1,6 @@
 // Bump this by 1 every time this file (or admin.html/index.html) is redeployed.
 // Lets the page detect and warn if the browser is running a stale cached copy.
-const LOCAL_VERSION = "79";
+const LOCAL_VERSION = "80";
 
 // Public site URL — used in the Kijiji/FB listing generator to point buyers back to the full catalog.
 const SITE_URL = "https://www.vintageplay.ca";
@@ -19,7 +19,7 @@ const SELLER_PROFILES = [
 // itself (arranged privately once a real buyer reaches out) — pickup location/shipping
 // and the bundle-deal note instead.
 const PICKUP_LOCATION_NOTE = "Located in Brampton, ON - local pickup, drop-off, or meetup can be arranged.";
-const LISTING_SHIPPING_NOTE = "Shipping available via Canada Post for buyers outside my general area - cost quoted separately after the item is weighed and packed.";
+const LISTING_SHIPPING_NOTE = "Shipping available via Canada Post for buyers outside our general area - cost quoted separately after the item is weighed and packed.";
 
 // Free carrier email-to-SMS gateway — sends a short text alert on new orders.
 const SMS_GATEWAY_ADDRESS = "4167103600@pcs.rogers.com";
