@@ -912,7 +912,7 @@
                 </h4>
                 <div class="meta">${escapeHtml(promoScopeSummary(p))} &middot; ${promoDateText(p)}</div>
                 <div class="btn-row" style="margin-top:0.5rem;align-items:center;">
-                  <button type="button" class="btn ${p.active ? "" : "secondary"}" data-promo-toggle="${p.id}" style="margin-top:0;min-width:5.5rem;">${p.active ? "ON" : "OFF"}</button>
+                  <button type="button" class="btn ${p.active ? "" : "secondary"}" data-promo-toggle="${p.id}" style="margin-top:0;min-width:7rem;">${p.active ? "Turn OFF" : "Turn ON"}</button>
                   <strong style="color:${color};">${st.text}</strong>
                   <button type="button" class="btn secondary" data-promo-edit="${p.id}" style="margin-top:0;">Edit</button>
                   ${p.code ? `<button type="button" class="btn secondary" data-promo-link="${p.id}" style="margin-top:0;">Copy link</button>` : ""}
