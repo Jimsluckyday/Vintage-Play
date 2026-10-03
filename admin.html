@@ -171,6 +171,7 @@
         <button class="btn secondary" id="cancelEditBtn" hidden>Cancel Edit</button>
       </div>
       <p class="error-text" id="formError" hidden></p>
+      <p class="hint" id="uploadNote" style="font-weight:700;"></p>
     </div>
 
     <div class="section">
@@ -186,6 +187,7 @@
       <h2>Photo Storage</h2>
       <p class="hint">Older photos were uploaded at full phone size (3-8 MB each), which is what eats Supabase's free storage and bandwidth. This scans for photos over 500 KB, then shrinks each one to 1600px (same look on the site), swaps it into its listing, and deletes the big original. It runs in this browser, one photo at a time, and you can stop it and resume later &mdash; photos already shrunk are skipped on the next scan.</p>
       <div class="btn-row">
+        <button type="button" class="btn secondary" id="r2TestBtn">Test R2 upload</button>
         <button type="button" class="btn secondary" id="photoScanBtn">Scan for large photos</button>
         <button type="button" class="btn" id="photoShrinkBtn" hidden>Shrink large photos</button>
         <button type="button" class="btn danger" id="photoStopBtn" hidden>Stop</button>
@@ -1402,14 +1404,24 @@
       return (await resp.json()).url;
     }
 
+    function setUploadNote(text, ok) {
+      const el = document.getElementById("uploadNote");
+      if (!el) return;
+      el.textContent = text;
+      el.style.color = ok ? "#2f7d78" : "#c2452f";
+    }
+
     async function uploadPhotos(files) {
       const urls = [];
+      let toR2 = 0;
+      let toSupabase = 0;
       for (const file of files) {
         const body = await shrinkImage(file);
 
         if (!r2UploadDisabledReason) {
           try {
             urls.push(await uploadToR2(body, file.name));
+            toR2++;
             continue;
           } catch (err) {
             r2UploadDisabledReason = err.message;
@@ -1429,6 +1441,12 @@
         if (error) throw error;
         const { data } = supabaseClient.storage.from("item-photos").getPublicUrl(path);
         urls.push(data.publicUrl);
+        toSupabase++;
+      }
+      if (toR2 && !toSupabase) {
+        setUploadNote(`Photo upload: ${toR2} saved to Cloudflare R2.`, true);
+      } else if (toSupabase) {
+        setUploadNote(`Photo upload: ${toSupabase} saved to Supabase instead of R2${r2UploadDisabledReason ? ` (R2 said: ${r2UploadDisabledReason})` : ""}.`, false);
       }
       return urls;
     }
@@ -1544,6 +1562,21 @@
       await loadItems();
     }
 
+    document.getElementById("r2TestBtn").addEventListener("click", async () => {
+      setPhotoStatus("Testing R2 upload...");
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = 8;
+        canvas.height = 8;
+        canvas.getContext("2d").fillRect(0, 0, 8, 8);
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.8));
+        const url = await uploadToR2(blob, "r2-test.jpg");
+        setPhotoStatus(`R2 upload WORKS. A tiny test image was stored at ${url} -- new photos will go to R2.`);
+        r2UploadDisabledReason = null;
+      } catch (err) {
+        setPhotoStatus(`R2 upload is NOT working yet. Cloudflare said: ${err.message}. Photos are still being saved to Supabase in the meantime.`);
+      }
+    });
     document.getElementById("photoScanBtn").addEventListener("click", scanLargePhotos);
     document.getElementById("photoShrinkBtn").addEventListener("click", shrinkLargePhotos);
     document.getElementById("photoStopBtn").addEventListener("click", () => {
