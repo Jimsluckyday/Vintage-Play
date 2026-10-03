@@ -62,6 +62,15 @@
       <div id="cartItems"></div>
       <p class="empty-note" id="cartEmptyNote" hidden>Your cart is empty.</p>
       <div class="cart-total">Total: $<span id="cartTotal">0.00</span></div>
+      <p class="hint" id="cartSavings" style="font-weight:700;color:var(--teal);" hidden></p>
+      <div class="section" style="padding:0;margin:0.5rem 0;">
+        <label for="cartPromoCode">Promo code</label>
+        <div class="btn-row" style="margin-top:0.25rem;">
+          <input type="text" id="cartPromoCode" placeholder="Enter code" autocomplete="off" style="max-width:12rem;" />
+          <button type="button" class="btn secondary" id="cartPromoApplyBtn" style="margin-top:0;">Apply</button>
+        </div>
+        <p class="hint" id="cartPromoStatus" style="margin-top:0.3rem;"></p>
+      </div>
       <p class="hint">This isn't an automatic checkout — sending a request lets us know what you're after so we can arrange payment and pickup/shipping together.</p>
       <button type="button" class="btn-link" id="returnsToggleBtnCart">Returns &amp; Warranty policy</button>
 
@@ -181,6 +190,49 @@
   <script src="/config.js"></script>
   <script>
     let allItems = [];
+
+    // ---- Sales and promo codes ----
+    // autoPromos: sales that apply to everyone automatically. codePromo: the promo
+    // code the shopper typed into the cart. The best single discount wins per item.
+    let autoPromos = [];
+    let codePromo = null;
+
+    function bestPromoFor(item) {
+      let best = null;
+      for (const p of autoPromos) {
+        if (promoApplies(p, item) && (!best || Number(p.percent) > Number(best.percent))) best = p;
+      }
+      if (codePromo && promoApplies(codePromo, item) && (!best || Number(codePromo.percent) > Number(best.percent))) best = codePromo;
+      return best;
+    }
+
+    function effectivePrice(item) {
+      const base = Number(item.asking_price);
+      const promo = bestPromoFor(item);
+      return promo ? Math.min(base, salePriceFor(base, promo.percent)) : base;
+    }
+
+    // Price tag with the old price crossed out when the item is discounted.
+    function priceHtml(item) {
+      const base = Number(item.asking_price);
+      const now = effectivePrice(item);
+      if (now < base) {
+        return `<span class="price-was">$${base.toFixed(2)}</span> <span class="price price-sale">$${now.toFixed(2)}</span>`;
+      }
+      return `<span class="price">$${now.toFixed(2)}</span>`;
+    }
+
+    function discountBadgeHtml(item, extraStyle = "") {
+      const promo = bestPromoFor(item);
+      if (!promo || effectivePrice(item) >= Number(item.asking_price)) return "";
+      return `<span class="badge badge-sale" ${extraStyle ? `style="${extraStyle}"` : ""}>${Number(promo.percent)}% OFF</span>`;
+    }
+
+    async function loadAutoPromos() {
+      // The table may not exist yet (or hold nothing) -- the store just shows regular prices then.
+      const { data, error } = await supabaseClient.from("promotions").select("*");
+      autoPromos = error || !data ? [] : data.filter((p) => !p.code);
+    }
     let activeCategory = "all";
     let activeBrand = null;
     let activeItemType = null;
@@ -585,11 +637,11 @@
     // doesn't match the number printed on it.
     function sortItems(list, mode) {
       const priceOf = (item) => {
-        if (!item.variant_group) return Number(item.asking_price);
+        if (!item.variant_group) return effectivePrice(item);
         const variants = list.filter((i) => i.variant_group === item.variant_group);
         const available = variants.filter((v) => v.status === "available");
         const source = available.length ? available : variants;
-        return Math.min(...source.map((v) => Number(v.asking_price)));
+        return Math.min(...source.map((v) => effectivePrice(v)));
       };
       const sorted = [...list];
       if (mode === "price-asc") {
@@ -813,11 +865,13 @@
       const first = variants[0];
       const available = variants.filter((v) => v.status === "available");
       const priceSource = available.length ? available : variants;
-      const minPrice = Math.min(...priceSource.map((v) => Number(v.asking_price)));
+      const minPrice = Math.min(...priceSource.map((v) => effectivePrice(v)));
+      const minListPrice = Math.min(...priceSource.map((v) => Number(v.asking_price)));
       return `
         <span class="tag">${itemTagLabel(first)}</span>
         <span class="tag-condition">${variants.length} condition options</span>
-        ${minPrice >= RARE_THRESHOLD ? `<span class="badge badge-rare">RARE</span>` : ""}
+        ${minListPrice >= RARE_THRESHOLD ? `<span class="badge badge-rare">RARE</span>` : ""}
+        ${minPrice < minListPrice ? `<span class="badge badge-sale">SALE</span>` : ""}
         <span class="list-row-title">${escapeHtml(first.title)}</span>
         <span class="price">Starts at $${minPrice.toFixed(2)}</span>
         <button type="button" class="btn-link" data-group-details="${first.variant_group}">Details</button>
@@ -862,10 +916,11 @@
           ${item.condition_grade === "New" ? `<span class="badge badge-new" style="align-self:flex-start;">NEW</span>` : ""}
           ${item.highlight_note ? `<span class="badge badge-highlight" style="align-self:flex-start;">${escapeHtml(item.highlight_note)}</span>` : ""}
           ${item.promo_at ? `<span class="badge badge-sale" style="align-self:flex-start;">SALE</span>` : ""}
+          ${discountBadgeHtml(item, "align-self:flex-start;")}
           ${Number(item.asking_price) >= RARE_THRESHOLD ? `<span class="badge badge-rare" style="align-self:flex-start;">RARE</span>` : ""}
           <h3>${escapeHtml(item.title)}</h3>
           <div class="card-bottom">
-            <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
+            ${priceHtml(item)}
             <span class="status ${item.status}">${item.status === "available" ? "" : item.status.toUpperCase()}</span>
             ${item.quantity > 1 ? `<span class="qty-note">${item.quantity} in stock</span>` : ""}
             <div class="btn-row">
@@ -885,9 +940,10 @@
         ${item.condition_grade === "New" ? `<span class="badge badge-new">NEW</span>` : ""}
         ${item.highlight_note ? `<span class="badge badge-highlight">${escapeHtml(item.highlight_note)}</span>` : ""}
         ${item.promo_at ? `<span class="badge badge-sale">SALE</span>` : ""}
+        ${discountBadgeHtml(item)}
         ${Number(item.asking_price) >= RARE_THRESHOLD ? `<span class="badge badge-rare">RARE</span>` : ""}
         <span class="list-row-title">${escapeHtml(item.title)}</span>
-        <span class="price">$${Number(item.asking_price).toFixed(2)}</span>
+        ${priceHtml(item)}
         <span class="status ${item.status}">${item.status === "available" ? "" : item.status.toUpperCase()}</span>
         ${item.quantity > 1 ? `<span class="qty-note">${item.quantity} in stock</span>` : ""}
         <button type="button" class="btn-link" data-details="${item.id}">Details</button>
@@ -997,7 +1053,13 @@
       document.getElementById("lbAddCartBtn").hidden = item.status !== "available";
 
       document.getElementById("lbTitle").textContent = item.title;
-      document.getElementById("lbPrice").textContent = `$${Number(item.asking_price).toFixed(2)}`;
+      {
+        const base = Number(item.asking_price);
+        const now = effectivePrice(item);
+        document.getElementById("lbPrice").innerHTML = now < base
+          ? `<s style="opacity:0.6;font-size:0.8em;">$${base.toFixed(2)}</s> $${now.toFixed(2)}`
+          : `$${now.toFixed(2)}`;
+      }
 
       const highlightEl = document.getElementById("lbHighlight");
       highlightEl.hidden = !item.highlight_note;
@@ -1055,7 +1117,7 @@
 
       const variantsEl = document.getElementById("lbVariants");
       variantsEl.hidden = false;
-      const sorted = [...variants].sort((a, b) => Number(a.asking_price) - Number(b.asking_price));
+      const sorted = [...variants].sort((a, b) => effectivePrice(a) - effectivePrice(b));
       variantsEl.innerHTML = sorted
         .map((v) => {
           const conditionText = conditionTagLabel(v) || "Condition not specified";
@@ -1072,7 +1134,7 @@
             <div class="lb-variant-row">
               <span class="tag-condition">${escapeHtml(conditionText)}</span>
               ${notesHtml}
-              <span class="price">$${Number(v.asking_price).toFixed(2)}</span>
+              ${priceHtml(v)}
               ${actionHtml}
             </div>
           `;
@@ -1235,20 +1297,25 @@
       emptyNote.hidden = lines.length > 0;
 
       let total = 0;
+      let savings = 0;
       lines.forEach(({ item, qty }) => {
-        total += Number(item.asking_price) * qty;
+        total += effectivePrice(item) * qty;
+        savings += (Number(item.asking_price) - effectivePrice(item)) * qty;
         const row = document.createElement("div");
         row.className = "cart-line";
         row.innerHTML = `
           <span class="cart-line-title">${escapeHtml(item.title)}</span>
           <input type="number" min="1" max="${item.quantity || 1}" value="${qty}" data-cart-qty="${item.id}" style="width:60px;" />
-          <span class="cart-line-price">$${(Number(item.asking_price) * qty).toFixed(2)}</span>
+          <span class="cart-line-price">${effectivePrice(item) < Number(item.asking_price) ? `<s style="opacity:0.55;">$${(Number(item.asking_price) * qty).toFixed(2)}</s> ` : ""}$${(effectivePrice(item) * qty).toFixed(2)}</span>
           <button type="button" class="btn danger" data-cart-remove="${item.id}" style="margin-top:0;padding:0.2rem 0.5rem;font-size:0.75rem;">Remove</button>
         `;
         itemsEl.appendChild(row);
       });
 
       document.getElementById("cartTotal").textContent = total.toFixed(2);
+      const savingsEl = document.getElementById("cartSavings");
+      savingsEl.hidden = savings < 0.005;
+      savingsEl.textContent = savings >= 0.005 ? `You're saving $${savings.toFixed(2)}` : "";
       document.getElementById("cartCopyStatus").textContent = "";
 
       itemsEl.querySelectorAll("[data-cart-remove]").forEach((btn) =>
@@ -1261,15 +1328,17 @@
 
     function buildOrderSummaryText(customer) {
       const lines = cartLines();
-      const total = lines.reduce((sum, { item, qty }) => sum + Number(item.asking_price) * qty, 0);
+      const total = lines.reduce((sum, { item, qty }) => sum + effectivePrice(item) * qty, 0);
+      const codeUsed = codePromo && lines.some(({ item }) => bestPromoFor(item) === codePromo);
       const body = [
         "Order Request - Vintage Play Collectables",
         "",
         ...(customer
           ? [`From: ${customer.name}`, `Contact: ${customer.contact}`, ...(customer.notes ? [`Notes: ${customer.notes}`] : []), ""]
           : []),
-        ...lines.map(({ item, qty }) => `${qty}x ${item.title} - $${Number(item.asking_price).toFixed(2)} each = $${(Number(item.asking_price) * qty).toFixed(2)}`),
+        ...lines.map(({ item, qty }) => `${qty}x ${item.title} - $${effectivePrice(item).toFixed(2)} each = $${(effectivePrice(item) * qty).toFixed(2)}${effectivePrice(item) < Number(item.asking_price) ? ` (was $${Number(item.asking_price).toFixed(2)})` : ""}`),
         "",
+        ...(codeUsed ? [`Promo code: ${codePromo.code} (${Number(codePromo.percent)}% off eligible items)`, ""] : []),
         `Total: $${total.toFixed(2)}`,
         "",
         "Payment options:",
@@ -1423,9 +1492,11 @@
       btn.disabled = true;
       statusEl.textContent = "Sending...";
 
-      const total = lines.reduce((sum, { item, qty }) => sum + Number(item.asking_price) * qty, 0);
+      const total = lines.reduce((sum, { item, qty }) => sum + effectivePrice(item) * qty, 0);
+      const discountTotal = lines.reduce((sum, { item, qty }) => sum + (Number(item.asking_price) - effectivePrice(item)) * qty, 0);
+      const codeUsed = codePromo && lines.some(({ item }) => bestPromoFor(item) === codePromo);
       const orderItems = lines.map(({ item, qty }) => ({
-        id: item.id, title: item.title, qty, price: Number(item.asking_price),
+        id: item.id, title: item.title, qty, price: effectivePrice(item), list_price: Number(item.asking_price),
       }));
       const summaryText = buildOrderSummaryText();
       const emailedText = buildOrderSummaryText(customer);
@@ -1436,6 +1507,8 @@
         customer_name: customer.name,
         customer_contact: customer.contact,
         customer_notes: customer.notes || null,
+        promo_code: codeUsed ? codePromo.code : null,
+        discount_total: discountTotal > 0.004 ? Math.round(discountTotal * 100) / 100 : null,
       });
       if (dbError) {
         // The contact columns may not exist yet -- keep saving the order itself, and
@@ -1476,7 +1549,7 @@
     });
 
     document.getElementById("cartPayBtn").addEventListener("click", () => {
-      const total = cartLines().reduce((sum, { item, qty }) => sum + Number(item.asking_price) * qty, 0);
+      const total = cartLines().reduce((sum, { item, qty }) => sum + effectivePrice(item) * qty, 0);
       if (total <= 0) return;
       window.open(`https://paypal.me/${PAYPAL_ME_HANDLE}/${total.toFixed(2)}`, "_blank");
     });
@@ -1530,6 +1603,44 @@
       renderGrid();
     }
 
+    function promoScopeText(promo) {
+      const parts = [];
+      const brand = promo.brand && ALL_BRANDS.find((b) => b.slug === promo.brand);
+      if (brand) parts.push(brandTagLabel(brand.slug) || brand.label);
+      else if (promo.category) parts.push(categoryLabel(promo.category));
+      else parts.push("eligible items");
+      if (promo.condition_grade) parts.push(`${promo.condition_grade.toLowerCase()} only`);
+      return parts.join(", ");
+    }
+
+    async function applyPromoCode(codeText, { quiet = false } = {}) {
+      const statusEl = document.getElementById("cartPromoStatus");
+      const code = (codeText || "").trim();
+      if (!code) return;
+      const { data, error } = await supabaseClient.rpc("check_promo_code", { p_code: code });
+      const promo = !error && data && data[0];
+      if (!promo) {
+        if (!quiet) statusEl.textContent = "That code isn't valid or has expired.";
+        return;
+      }
+      codePromo = promo;
+      try { sessionStorage.setItem("vp_promo_code", promo.code); } catch (e) { /* private mode -- fine */ }
+      document.getElementById("cartPromoCode").value = promo.code;
+      renderGrid();
+      renderCartPanel();
+      const qualifies = cartLines().some(({ item }) => bestPromoFor(item) === codePromo);
+      statusEl.textContent = qualifies
+        ? `Code ${promo.code} applied: ${Number(promo.percent)}% off ${promoScopeText(promo)}.`
+        : `Code ${promo.code} is valid (${Number(promo.percent)}% off ${promoScopeText(promo)}) -- nothing in your cart qualifies yet.`;
+    }
+
+    document.getElementById("cartPromoApplyBtn").addEventListener("click", () =>
+      applyPromoCode(document.getElementById("cartPromoCode").value)
+    );
+    document.getElementById("cartPromoCode").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") applyPromoCode(e.target.value);
+    });
+
     async function init() {
       emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
       await loadCategories();
@@ -1537,7 +1648,14 @@
       await loadItemTypes();
       applyUrlParams();
       renderFilters();
-      loadItems();
+      await loadAutoPromos();
+      await loadItems();
+      // A code in the address (e.g. from a flyer QR code: ?code=SPRING10) or kept from earlier this visit.
+      let startCode = new URLSearchParams(location.search).get("code");
+      if (!startCode) {
+        try { startCode = sessionStorage.getItem("vp_promo_code"); } catch (e) { /* ignore */ }
+      }
+      if (startCode) applyPromoCode(startCode, { quiet: true });
       startVersionWatch();
       renderCartBadge();
       renderPaymentOptions();

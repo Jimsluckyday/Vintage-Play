@@ -36,6 +36,68 @@
       <button class="btn secondary" id="logoutBtn">Log Out</button>
     </div>
 
+    <div class="section" id="promoSection">
+      <h2>Sales &amp; Promo Codes (<span id="promoCount">0</span>)</h2>
+      <p class="hint">A <strong>sale</strong> lowers prices automatically for everyone while it's ON. A <strong>promo code</strong> only works when a shopper types it into the cart (or opens a link/QR code ending in <code>?code=YOURCODE</code>). Your listed prices never change &mdash; turning a sale OFF puts everything back instantly. Where discounts overlap, the biggest single one wins.</p>
+      <input type="text" id="promoSearch" placeholder="Search sales and codes..." />
+      <div id="promoList" style="margin-top:0.5rem;"></div>
+      <p class="error-text" id="promoListError" hidden></p>
+
+      <details id="promoFormBox" style="margin-top:0.75rem;">
+        <summary style="cursor:pointer;font-weight:700;" id="promoFormTitle">+ New sale or promo code</summary>
+        <label for="promoName">Name (just for you, e.g. "Spring Toy Sale")</label>
+        <input type="text" id="promoName" />
+
+        <label for="promoType">Type</label>
+        <select id="promoType">
+          <option value="sale">Automatic sale (everyone sees it)</option>
+          <option value="code">Promo code (shopper types it in)</option>
+        </select>
+
+        <div id="promoCodeRow" hidden>
+          <label for="promoCode">Code (letters/numbers, no spaces)</label>
+          <div class="btn-row" style="margin-top:0;">
+            <input type="text" id="promoCode" placeholder="e.g. SPRING10" style="max-width:14rem;text-transform:uppercase;" />
+            <button type="button" class="btn secondary" id="promoGenerateBtn" style="margin-top:0;">Generate</button>
+          </div>
+        </div>
+
+        <label for="promoPercent">Percent off</label>
+        <input type="number" id="promoPercent" min="1" max="90" step="1" placeholder="e.g. 20" style="max-width:8rem;" />
+
+        <label for="promoCategory">Applies to category</label>
+        <select id="promoCategory"></select>
+
+        <div id="promoBrandRow" hidden>
+          <label for="promoBrand">Subcategory</label>
+          <select id="promoBrand"></select>
+        </div>
+
+        <label for="promoCondition">Condition</label>
+        <select id="promoCondition">
+          <option value="">Any condition</option>
+          <option value="Used">Used only</option>
+          <option value="New">New only</option>
+        </select>
+
+        <div id="promoExcludeRow" hidden>
+          <label>Leave these subcategories out</label>
+          <div id="promoExcludeBoxes"></div>
+        </div>
+
+        <label for="promoStart">Starts (optional)</label>
+        <input type="date" id="promoStart" style="max-width:12rem;" />
+        <label for="promoEnd">Ends (optional &mdash; the last day it's on)</label>
+        <input type="date" id="promoEnd" style="max-width:12rem;" />
+
+        <div class="btn-row">
+          <button type="button" class="btn" id="promoSaveBtn">Save</button>
+          <button type="button" class="btn secondary" id="promoCancelBtn" hidden>Cancel editing</button>
+        </div>
+        <p class="error-text" id="promoFormError" hidden></p>
+      </details>
+    </div>
+
     <div class="section">
       <h2>Orders (<span id="orderCount">0</span>)</h2>
       <p class="hint">Requests buyers submit from the cart. You should also get an email for each one — this list is the backup record.</p>
@@ -742,7 +804,257 @@
       adminView.hidden = false;
       loadSales().then(loadItems);
       loadOrders();
+      loadPromos();
     }
+
+
+    // ---- Sales & promo codes ----
+    let promotions = [];
+    let promoEditingId = null;
+
+    function promoScopeSummary(promo) {
+      const bits = [];
+      const brand = promo.brand && ALL_BRANDS.find((b) => b.slug === promo.brand);
+      if (brand) bits.push(`${categoryLabel(brand.category)} › ${brand.label}`);
+      else bits.push(promo.category ? `All ${categoryLabel(promo.category)}` : "Everything in the store");
+      if (promo.condition_grade) bits.push(`${promo.condition_grade.toLowerCase()} only`);
+      const out = (promo.exclude_brands || []).map((slug) => (ALL_BRANDS.find((b) => b.slug === slug) || {}).label || slug);
+      if (out.length) bits.push(`not ${out.join(", ")}`);
+      return bits.join(", ");
+    }
+
+    function promoStatus(promo) {
+      if (!promo.active) return { text: "OFF", cls: "off" };
+      const now = new Date();
+      if (promo.starts_at && new Date(promo.starts_at) > now) return { text: "Scheduled", cls: "scheduled" };
+      if (promo.ends_at && new Date(promo.ends_at) < now) return { text: "Ended", cls: "off" };
+      return { text: "LIVE", cls: "live" };
+    }
+
+    function promoDateText(promo) {
+      const f = (d) => new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+      if (promo.starts_at && promo.ends_at) return `${f(promo.starts_at)} – ${f(promo.ends_at)}`;
+      if (promo.starts_at) return `from ${f(promo.starts_at)}`;
+      if (promo.ends_at) return `until ${f(promo.ends_at)}`;
+      return "no dates";
+    }
+
+    function populatePromoForm() {
+      const catSel = document.getElementById("promoCategory");
+      const prev = catSel.value;
+      catSel.innerHTML = `<option value="">Everything in the store</option>` + ALL_CATEGORIES.map((c) => `<option value="${c.slug}">${escapeHtml(c.label)}</option>`).join("");
+      catSel.value = prev;
+      refreshPromoBrandControls();
+    }
+
+    function refreshPromoBrandControls(selectedBrand = "", excluded = []) {
+      const category = document.getElementById("promoCategory").value;
+      const brandRow = document.getElementById("promoBrandRow");
+      const excludeRow = document.getElementById("promoExcludeRow");
+      const brandSel = document.getElementById("promoBrand");
+      const brands = category ? brandsForCategory(category) : [];
+      brandRow.hidden = !brands.length;
+      brandSel.innerHTML = `<option value="">Whole category</option>` + brands.map((b) => `<option value="${b.slug}">${escapeHtml(b.label)}</option>`).join("");
+      brandSel.value = selectedBrand;
+      const showExcludes = brands.length > 0 && !selectedBrand;
+      excludeRow.hidden = !showExcludes;
+      document.getElementById("promoExcludeBoxes").innerHTML = brands
+        .map((b) => `<label style="display:inline-flex;gap:0.35rem;align-items:center;margin-right:1rem;font-weight:400;"><input type="checkbox" data-promo-exclude="${b.slug}" ${excluded.includes(b.slug) ? "checked" : ""} style="width:auto;" /> ${escapeHtml(b.label)}</label>`)
+        .join("");
+    }
+
+    function generatePromoCode() {
+      const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      let out = "";
+      const bytes = crypto.getRandomValues(new Uint8Array(6));
+      bytes.forEach((b) => { out += alphabet[b % alphabet.length]; });
+      return out;
+    }
+
+    async function loadPromos() {
+      populatePromoForm();
+      const errEl = document.getElementById("promoListError");
+      errEl.hidden = true;
+      const { data, error } = await supabaseClient.from("promotions").select("*").order("created_at", { ascending: false });
+      if (error) {
+        promotions = [];
+        errEl.textContent = `Couldn't load sales and codes: ${error.message}. If this is the first time, run promotions_setup.sql in the Supabase SQL Editor (and make sure your login email is on the admin list).`;
+        errEl.hidden = false;
+      } else {
+        promotions = data;
+      }
+      renderPromoList();
+    }
+
+    function renderPromoList() {
+      document.getElementById("promoCount").textContent = promotions.length;
+      const listEl = document.getElementById("promoList");
+      const term = document.getElementById("promoSearch").value.trim().toLowerCase();
+      const order = { live: 0, scheduled: 1, off: 2 };
+      const shown = promotions
+        .filter((p) => !term || `${p.name} ${p.code || ""} ${promoScopeSummary(p)}`.toLowerCase().includes(term))
+        .sort((a, b) => order[promoStatus(a).cls] - order[promoStatus(b).cls]);
+
+      if (!shown.length) {
+        listEl.innerHTML = `<p class="hint">${promotions.length ? "Nothing matches that search." : "No sales or promo codes yet."}</p>`;
+        return;
+      }
+
+      listEl.innerHTML = shown
+        .map((p) => {
+          const st = promoStatus(p);
+          const color = st.cls === "live" ? "#2f7d78" : st.cls === "scheduled" ? "#b8860b" : "#8a8a8a";
+          return `
+            <div class="item-row" data-promo-row="${p.id}">
+              <div class="info">
+                <h4>${escapeHtml(p.name)} &mdash; ${Number(p.percent)}% off
+                  ${p.code ? `<span class="meta" style="background:#eee;border-radius:4px;padding:0.1rem 0.4rem;font-family:monospace;">CODE: ${escapeHtml(p.code)}</span>` : `<span class="meta">(automatic sale)</span>`}
+                </h4>
+                <div class="meta">${escapeHtml(promoScopeSummary(p))} &middot; ${promoDateText(p)}</div>
+                <div class="btn-row" style="margin-top:0.5rem;align-items:center;">
+                  <button type="button" class="btn ${p.active ? "" : "secondary"}" data-promo-toggle="${p.id}" style="margin-top:0;min-width:5.5rem;">${p.active ? "ON" : "OFF"}</button>
+                  <strong style="color:${color};">${st.text}</strong>
+                  <button type="button" class="btn secondary" data-promo-edit="${p.id}" style="margin-top:0;">Edit</button>
+                  ${p.code ? `<button type="button" class="btn secondary" data-promo-link="${p.id}" style="margin-top:0;">Copy link</button>` : ""}
+                  <button type="button" class="btn danger" data-promo-delete="${p.id}" style="margin-top:0;">Delete</button>
+                </div>
+              </div>
+            </div>`;
+        })
+        .join("");
+
+      listEl.querySelectorAll("[data-promo-toggle]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          const promo = promotions.find((x) => x.id === btn.dataset.promoToggle);
+          const { error } = await supabaseClient.from("promotions").update({ active: !promo.active }).eq("id", promo.id);
+          if (error) {
+            alert(`Couldn't update: ${error.message}`);
+            return;
+          }
+          promo.active = !promo.active;
+          renderPromoList();
+        })
+      );
+      listEl.querySelectorAll("[data-promo-edit]").forEach((btn) =>
+        btn.addEventListener("click", () => startPromoEdit(btn.dataset.promoEdit))
+      );
+      listEl.querySelectorAll("[data-promo-link]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          const promo = promotions.find((x) => x.id === btn.dataset.promoLink);
+          const url = `${SITE_URL}/?code=${encodeURIComponent(promo.code)}`;
+          try {
+            await navigator.clipboard.writeText(url);
+            btn.textContent = "Copied!";
+          } catch (e) {
+            prompt("Copy this link:", url);
+          }
+        })
+      );
+      listEl.querySelectorAll("[data-promo-delete]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          const promo = promotions.find((x) => x.id === btn.dataset.promoDelete);
+          if (!confirm(`Delete "${promo.name}"? (Turning it OFF instead keeps it for next time.)`)) return;
+          const { error } = await supabaseClient.from("promotions").delete().eq("id", promo.id);
+          if (error) {
+            alert(`Couldn't delete: ${error.message}`);
+            return;
+          }
+          await loadPromos();
+        })
+      );
+    }
+
+    function resetPromoForm() {
+      promoEditingId = null;
+      ["promoName", "promoCode", "promoPercent", "promoStart", "promoEnd"].forEach((id) => (document.getElementById(id).value = ""));
+      document.getElementById("promoType").value = "sale";
+      document.getElementById("promoCategory").value = "";
+      document.getElementById("promoCondition").value = "";
+      document.getElementById("promoCodeRow").hidden = true;
+      refreshPromoBrandControls();
+      document.getElementById("promoFormTitle").textContent = "+ New sale or promo code";
+      document.getElementById("promoCancelBtn").hidden = true;
+      document.getElementById("promoFormError").hidden = true;
+    }
+
+    function startPromoEdit(id) {
+      const p = promotions.find((x) => x.id === id);
+      if (!p) return;
+      promoEditingId = id;
+      document.getElementById("promoName").value = p.name;
+      document.getElementById("promoPercent").value = Number(p.percent);
+      document.getElementById("promoType").value = p.code ? "code" : "sale";
+      document.getElementById("promoCodeRow").hidden = !p.code;
+      document.getElementById("promoCode").value = p.code || "";
+      document.getElementById("promoCategory").value = p.category || "";
+      refreshPromoBrandControls(p.brand || "", p.exclude_brands || []);
+      document.getElementById("promoCondition").value = p.condition_grade || "";
+      document.getElementById("promoStart").value = p.starts_at ? p.starts_at.slice(0, 10) : "";
+      document.getElementById("promoEnd").value = p.ends_at ? p.ends_at.slice(0, 10) : "";
+      document.getElementById("promoFormTitle").textContent = `Editing: ${p.name}`;
+      document.getElementById("promoCancelBtn").hidden = false;
+      document.getElementById("promoFormError").hidden = true;
+      const box = document.getElementById("promoFormBox");
+      box.open = true;
+      box.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    document.getElementById("promoSearch").addEventListener("input", renderPromoList);
+    document.getElementById("promoType").addEventListener("change", (e) => {
+      const isCode = e.target.value === "code";
+      document.getElementById("promoCodeRow").hidden = !isCode;
+      if (isCode && !document.getElementById("promoCode").value) document.getElementById("promoCode").value = generatePromoCode();
+    });
+    document.getElementById("promoGenerateBtn").addEventListener("click", () => {
+      document.getElementById("promoCode").value = generatePromoCode();
+    });
+    document.getElementById("promoCategory").addEventListener("change", () => refreshPromoBrandControls());
+    document.getElementById("promoBrand").addEventListener("change", () => {
+      refreshPromoBrandControls(document.getElementById("promoBrand").value);
+    });
+    document.getElementById("promoCancelBtn").addEventListener("click", resetPromoForm);
+
+    document.getElementById("promoSaveBtn").addEventListener("click", async () => {
+      const errEl = document.getElementById("promoFormError");
+      errEl.hidden = true;
+      const fail = (msg) => {
+        errEl.textContent = msg;
+        errEl.hidden = false;
+      };
+      const name = document.getElementById("promoName").value.trim();
+      const percent = Number(document.getElementById("promoPercent").value);
+      const isCode = document.getElementById("promoType").value === "code";
+      const code = isCode ? document.getElementById("promoCode").value.trim().toUpperCase() : null;
+      if (!name) return fail("Give it a name so you can find it later.");
+      if (!(percent >= 1 && percent <= 90)) return fail("Percent off must be between 1 and 90.");
+      if (isCode && !/^[A-Z0-9-]{3,20}$/.test(code)) return fail("Codes need 3-20 letters or numbers (dashes OK, no spaces).");
+
+      const brand = document.getElementById("promoBrand").value || null;
+      const row = {
+        name,
+        percent,
+        code,
+        category: document.getElementById("promoCategory").value || null,
+        brand,
+        condition_grade: document.getElementById("promoCondition").value || null,
+        exclude_brands: brand ? [] : [...document.querySelectorAll("[data-promo-exclude]:checked")].map((c) => c.dataset.promoExclude),
+        starts_at: document.getElementById("promoStart").value ? new Date(`${document.getElementById("promoStart").value}T00:00:00`).toISOString() : null,
+        // End date is the last day it's on, so run until the end of that day.
+        ends_at: document.getElementById("promoEnd").value ? new Date(`${document.getElementById("promoEnd").value}T23:59:59`).toISOString() : null,
+      };
+      if (row.starts_at && row.ends_at && row.starts_at > row.ends_at) return fail("The end date is before the start date.");
+
+      const query = promoEditingId
+        ? supabaseClient.from("promotions").update(row).eq("id", promoEditingId)
+        : supabaseClient.from("promotions").insert({ ...row, active: true });
+      const { error } = await query;
+      if (error) {
+        return fail(error.code === "23505" ? "That code is already used by another promotion." : error.message);
+      }
+      resetPromoForm();
+      document.getElementById("promoFormBox").open = false;
+      await loadPromos();
+    });
 
     async function loadSales() {
       const { data, error } = await supabaseClient

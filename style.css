@@ -1183,3 +1183,13 @@ button {
   font-size: 0.7rem;
   z-index: 999;
 }
+
+/* Sales: old price crossed out next to the discounted one */
+.price-was {
+  text-decoration: line-through;
+  opacity: 0.6;
+  font-size: 0.85em;
+  align-self: flex-start;
+}
+.price-sale { background: var(--brick); color: #fff; }
+.card-body .price.price-sale { background: var(--brick); color: #fff; }

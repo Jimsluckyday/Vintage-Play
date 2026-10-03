@@ -1,6 +1,6 @@
 // Bump this by 1 every time this file (or admin.html/index.html) is redeployed.
 // Lets the page detect and warn if the browser is running a stale cached copy.
-const LOCAL_VERSION = "84";
+const LOCAL_VERSION = "85";
 
 // Public site URL — used in the Kijiji/FB listing generator to point buyers back to the full catalog.
 const SITE_URL = "https://www.vintageplay.ca";
@@ -94,6 +94,33 @@ function startVersionWatch() {
   };
   check();
   setInterval(check, 60000);
+}
+
+// ---- Sales / promo codes (shared by the store and the admin page) ----
+// A promotion row (see Inventory/promotions_setup.sql) covers a category, optionally
+// one subcategory ("brand"), optionally one condition, minus any excluded subcategories.
+function promoIsLive(promo, now = new Date()) {
+  if (!promo || !promo.active) return false;
+  if (promo.starts_at && new Date(promo.starts_at) > now) return false;
+  if (promo.ends_at && new Date(promo.ends_at) < now) return false;
+  return true;
+}
+
+function promoApplies(promo, item) {
+  if (!promoIsLive(promo)) return false;
+  if (promo.category && item.category !== promo.category) return false;
+  if (promo.brand && item.brand !== promo.brand) return false;
+  if (promo.condition_grade && item.condition_grade !== promo.condition_grade) return false;
+  if ((promo.exclude_brands || []).includes(item.brand)) return false;
+  return true;
+}
+
+// Rounds DOWN to a .99 ending so the shopper never pays more than the exact
+// discount (14.99 at 20% off = 11.99), keeping the shop's .99 pricing rule.
+function salePriceFor(price, percent) {
+  const exact = Number(price) * (1 - Number(percent) / 100);
+  const rounded = Math.floor(exact + 0.01) - 0.01;
+  return Math.max(0.99, Math.round(rounded * 100) / 100);
 }
 
 // Populated by loadCategories() before the page renders.
