@@ -183,6 +183,17 @@
     </div>
 
     <div class="section">
+      <h2>Photo Storage</h2>
+      <p class="hint">Older photos were uploaded at full phone size (3-8 MB each), which is what eats Supabase's free storage and bandwidth. This scans for photos over 500 KB, then shrinks each one to 1600px (same look on the site), swaps it into its listing, and deletes the big original. It runs in this browser, one photo at a time, and you can stop it and resume later &mdash; photos already shrunk are skipped on the next scan.</p>
+      <div class="btn-row">
+        <button type="button" class="btn secondary" id="photoScanBtn">Scan for large photos</button>
+        <button type="button" class="btn" id="photoShrinkBtn" hidden>Shrink large photos</button>
+        <button type="button" class="btn danger" id="photoStopBtn" hidden>Stop</button>
+      </div>
+      <p class="hint" id="photoOptStatus"></p>
+    </div>
+
+    <div class="section">
       <h2>Inventory Summary</h2>
       <div class="stat-grid" id="inventoryStatGrid"></div>
       <table class="summary-table" id="inventoryCategoryTable"></table>
@@ -1380,6 +1391,124 @@
       }
       return urls;
     }
+
+    // ---- One-time cleanup: shrink photos that were uploaded at full phone size ----
+    const PHOTO_URL_MARKER = "/storage/v1/object/public/item-photos/";
+    const LARGE_PHOTO_BYTES = 500 * 1024;
+    let largePhotos = [];
+    let photoShrinkStop = false;
+
+    function photoPathFromUrl(url) {
+      const i = url.indexOf(PHOTO_URL_MARKER);
+      return i === -1 ? null : decodeURIComponent(url.slice(i + PHOTO_URL_MARKER.length));
+    }
+
+    function setPhotoStatus(text) {
+      document.getElementById("photoOptStatus").textContent = text;
+    }
+
+    async function scanLargePhotos() {
+      const scanBtn = document.getElementById("photoScanBtn");
+      scanBtn.disabled = true;
+      document.getElementById("photoShrinkBtn").hidden = true;
+      const urls = new Set();
+      items.forEach((it) => (it.photo_urls || []).forEach((u) => photoPathFromUrl(u) && urls.add(u)));
+      const list = [...urls];
+      const found = [];
+      let done = 0;
+      let next = 0;
+      async function worker() {
+        while (next < list.length) {
+          const url = list[next++];
+          try {
+            const resp = await fetch(url, { method: "HEAD" });
+            const size = Number(resp.headers.get("content-length")) || 0;
+            if (size >= LARGE_PHOTO_BYTES) found.push({ url, size });
+          } catch (err) {
+            // unreachable photo -- skip it, nothing to shrink
+          }
+          done++;
+          if (done % 25 === 0) setPhotoStatus(`Checking photo sizes... ${done} of ${list.length}`);
+        }
+      }
+      await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
+      largePhotos = found.sort((a, b) => b.size - a.size);
+      const totalMb = largePhotos.reduce((t, p) => t + p.size, 0) / 1e6;
+      setPhotoStatus(
+        largePhotos.length
+          ? `Checked ${list.length} photos: ${largePhotos.length} are over 500 KB, ${totalMb.toFixed(0)} MB in total. Shrinking them downloads each one once (about ${totalMb.toFixed(0)} MB of bandwidth) and should leave roughly 10% of that.`
+          : `Checked ${list.length} photos: none are over 500 KB. Nothing to do.`
+      );
+      document.getElementById("photoShrinkBtn").hidden = largePhotos.length === 0;
+      scanBtn.disabled = false;
+    }
+
+    async function shrinkLargePhotos() {
+      const shrinkBtn = document.getElementById("photoShrinkBtn");
+      const scanBtn = document.getElementById("photoScanBtn");
+      const stopBtn = document.getElementById("photoStopBtn");
+      shrinkBtn.hidden = true;
+      scanBtn.disabled = true;
+      stopBtn.hidden = false;
+      photoShrinkStop = false;
+      let shrunk = 0, failed = 0, savedBytes = 0, couldNotDelete = 0;
+      let lastDeleteError = "";
+
+      for (let n = 0; n < largePhotos.length; n++) {
+        if (photoShrinkStop) break;
+        const entry = largePhotos[n];
+        setPhotoStatus(`Shrinking photo ${n + 1} of ${largePhotos.length}... (${shrunk} done, ${failed} skipped)`);
+        try {
+          const original = await (await fetch(entry.url)).blob();
+          const small = await shrinkImage(new File([original], "photo.jpg", { type: original.type || "image/jpeg" }));
+          if (!(small instanceof Blob) || small.size >= original.size * 0.9) throw new Error("couldn't make it meaningfully smaller");
+
+          const newPath = `${crypto.randomUUID()}.jpg`;
+          const { error: upErr } = await supabaseClient.storage
+            .from("item-photos")
+            .upload(newPath, small, { cacheControl: "31536000", contentType: "image/jpeg" });
+          if (upErr) throw upErr;
+          const newUrl = supabaseClient.storage.from("item-photos").getPublicUrl(newPath).data.publicUrl;
+
+          // Repoint every listing that uses the old photo BEFORE touching the old file.
+          const users = items.filter((i) => (i.photo_urls || []).includes(entry.url));
+          for (const it of users) {
+            const updated = it.photo_urls.map((u) => (u === entry.url ? newUrl : u));
+            const { error: rowErr } = await supabaseClient.from("items").update({ photo_urls: updated }).eq("id", it.id);
+            if (rowErr) throw rowErr;
+            it.photo_urls = updated;
+          }
+
+          const { error: delErr } = await supabaseClient.storage.from("item-photos").remove([photoPathFromUrl(entry.url)]);
+          if (delErr) {
+            couldNotDelete++;
+            lastDeleteError = delErr.message;
+          }
+          shrunk++;
+          savedBytes += original.size - small.size;
+        } catch (err) {
+          failed++;
+          console.warn("Photo shrink skipped:", entry.url, err);
+        }
+      }
+
+      stopBtn.hidden = true;
+      scanBtn.disabled = false;
+      const stoppedNote = photoShrinkStop ? " (stopped early -- scan again to continue.)" : "";
+      let msg = `Done: shrunk ${shrunk} photos (about ${(savedBytes / 1e6).toFixed(0)} MB smaller), ${failed} skipped.${stoppedNote}`;
+      if (couldNotDelete) {
+        msg += ` Heads up: ${couldNotDelete} old originals could NOT be deleted from storage (${lastDeleteError}) -- the site already uses the small versions, but storage space isn't freed until the delete permission is added (see photo_delete_policy.sql).`;
+      }
+      setPhotoStatus(msg);
+      await loadItems();
+    }
+
+    document.getElementById("photoScanBtn").addEventListener("click", scanLargePhotos);
+    document.getElementById("photoShrinkBtn").addEventListener("click", shrinkLargePhotos);
+    document.getElementById("photoStopBtn").addEventListener("click", () => {
+      photoShrinkStop = true;
+      setPhotoStatus("Stopping after the current photo...");
+    });
 
     document.getElementById("saveBtn").addEventListener("click", async () => {
       const errorEl = document.getElementById("formError");
