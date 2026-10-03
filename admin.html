@@ -1373,10 +1373,51 @@
       }
     }
 
+    // New photos go to Cloudflare R2 (free 10 GB, no bandwidth charges) through
+    // the /api/upload function, and are stored as the relative path
+    // "/img/<file>" so they keep working when the site gets its own domain. If
+    // R2 isn't reachable or configured yet, fall back to Supabase storage so
+    // uploads never just break; the reason is shown in the Photo Storage box.
+    let r2UploadDisabledReason = null;
+
+    async function uploadToR2(body, fileName) {
+      const { data } = await supabaseClient.auth.getSession();
+      if (!data.session) throw new Error("not signed in");
+      const form = new FormData();
+      form.append("file", body, fileName || "photo.jpg");
+      const resp = await fetch("/api/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${data.session.access_token}` },
+        body: form,
+      });
+      if (!resp.ok) {
+        let detail = resp.statusText;
+        try {
+          detail = (await resp.json()).error || detail;
+        } catch (err) {
+          // non-JSON response (e.g. the function isn't deployed) -- keep statusText
+        }
+        throw new Error(`${resp.status}: ${detail}`);
+      }
+      return (await resp.json()).url;
+    }
+
     async function uploadPhotos(files) {
       const urls = [];
       for (const file of files) {
         const body = await shrinkImage(file);
+
+        if (!r2UploadDisabledReason) {
+          try {
+            urls.push(await uploadToR2(body, file.name));
+            continue;
+          } catch (err) {
+            r2UploadDisabledReason = err.message;
+            console.warn("R2 upload unavailable, using Supabase storage instead:", err);
+            setPhotoStatus(`Photos are being saved to Supabase instead of R2 (R2 said: ${err.message}). Uploads still work; see the R2 setup steps to switch.`);
+          }
+        }
+
         const extMatch = file.name.match(/\.[a-zA-Z0-9]+$/);
         const ext = body === file ? (extMatch ? extMatch[0].toLowerCase() : "") : ".jpg";
         const path = `${crypto.randomUUID()}${ext}`;
