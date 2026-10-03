@@ -1410,7 +1410,7 @@
       try {
         await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
           message: summaryText,
-          to_email: ETRANSFER_EMAIL,
+          to_email: ORDER_NOTIFY_EMAIL,
         });
       } catch (e) {
         emailOk = false;
