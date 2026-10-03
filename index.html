@@ -114,6 +114,8 @@
     <h1 class="visually-hidden">Vintage Play Collectables</h1>
   </header>
 
+  <div class="sale-banner" id="saleBanner" hidden></div>
+
   <main>
     <div class="filters" id="filters"></div>
     <div class="subcat-picker" id="globalSubcatPicker" hidden>
@@ -232,6 +234,67 @@
       // The table may not exist yet (or hold nothing) -- the store just shows regular prices then.
       const { data, error } = await supabaseClient.from("promotions").select("*");
       autoPromos = error || !data ? [] : data.filter((p) => !p.code);
+    }
+
+    // Live automatic sales that touch a whole category tile or a subcategory tile,
+    // so browsers on the home page can see a sale exists without opening it.
+    // `limited` = the sale covers only part of what the tile holds.
+    function tileSaleFor(categorySlug, brandSlug) {
+      let best = null;
+      for (const p of autoPromos) {
+        if (!promoIsLive(p)) continue;
+        if (p.category && p.category !== categorySlug) continue;
+        if (brandSlug) {
+          if (p.brand && p.brand !== brandSlug) continue;
+          if ((p.exclude_brands || []).includes(brandSlug)) continue;
+        }
+        const limited = brandSlug
+          ? !!p.condition_grade
+          : !!(p.brand || p.condition_grade || (p.exclude_brands || []).length);
+        if (!best || Number(p.percent) > best.percent) best = { percent: Number(p.percent), limited };
+      }
+      return best;
+    }
+
+    function tileSaleBadgeHtml(categorySlug, brandSlug) {
+      const sale = tileSaleFor(categorySlug, brandSlug);
+      if (!sale) return "";
+      return `<span class="badge badge-sale" style="align-self:flex-start;">${sale.percent}% OFF${sale.limited ? " select items" : ""}</span>`;
+    }
+
+    // A strip under the logo listing every live automatic sale (promo codes stay private).
+    function renderSaleBanner() {
+      const bannerEl = document.getElementById("saleBanner");
+      const live = autoPromos.filter((p) => promoIsLive(p));
+      if (!live.length) {
+        bannerEl.hidden = true;
+        bannerEl.innerHTML = "";
+        return;
+      }
+      const fmt = (d) => new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      bannerEl.innerHTML = live
+        .map((p, i) => {
+          const brand = p.brand && ALL_BRANDS.find((b) => b.slug === p.brand);
+          const where = brand ? (brandTagLabel(brand.slug) || brand.label) : p.category ? categoryLabel(p.category) : "everything";
+          const through = p.ends_at ? ` through ${fmt(p.ends_at)}` : "";
+          const text = `<strong>${escapeHtml(p.name)}</strong> &mdash; ${Number(p.percent)}% off ${escapeHtml(where)}${through}`;
+          return p.category
+            ? `<button type="button" class="sale-banner-item" data-sale-index="${i}">${text} &rsaquo;</button>`
+            : `<span class="sale-banner-item">${text}</span>`;
+        })
+        .join("");
+      bannerEl.hidden = false;
+      bannerEl.querySelectorAll("[data-sale-index]").forEach((btn) =>
+        btn.addEventListener("click", () => {
+          const p = live[Number(btn.dataset.saleIndex)];
+          activeCategory = p.category;
+          resetDrilldown();
+          if (p.brand) activeBrand = p.brand;
+          renderFilters();
+          renderGrid();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        })
+      );
     }
     let activeCategory = "all";
     let activeBrand = null;
@@ -726,6 +789,7 @@
           card.innerHTML = `
             ${cat.cover_photo_url ? `<img src="${cat.cover_photo_url}" alt="${escapeHtml(cat.label)}" />` : `<div class="no-photo">${escapeHtml(cat.label)}</div>`}
             <div class="card-body">
+              ${tileSaleBadgeHtml(cat.slug, null)}
               <h3>${escapeHtml(cat.label)}</h3>
               <span class="price">${count} item${count === 1 ? "" : "s"}</span>
             </div>
@@ -754,6 +818,7 @@
           card.innerHTML = `
             ${brand.cover_photo_url ? `<img src="${brand.cover_photo_url}" alt="${escapeHtml(brand.label)}" />` : `<div class="no-photo">No photo</div>`}
             <div class="card-body">
+              ${tileSaleBadgeHtml(activeCategory, brand.slug)}
               <h3>${escapeHtml(brand.label)}</h3>
               <span class="price">${count} item${count === 1 ? "" : "s"}</span>
             </div>
@@ -1649,6 +1714,7 @@
       applyUrlParams();
       renderFilters();
       await loadAutoPromos();
+      renderSaleBanner();
       await loadItems();
       // A code in the address (e.g. from a flyer QR code: ?code=SPRING10) or kept from earlier this visit.
       let startCode = new URLSearchParams(location.search).get("code");

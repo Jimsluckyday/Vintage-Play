@@ -1193,3 +1193,28 @@ button {
 }
 .price-sale { background: var(--brick); color: #fff; }
 .card-body .price.price-sale { background: var(--brick); color: #fff; }
+
+/* Live-sale strip under the logo */
+.sale-banner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.6rem 1rem;
+  background: var(--mustard);
+  color: var(--ink);
+  border-top: 3px solid var(--ink);
+  border-bottom: 3px solid var(--ink);
+}
+.sale-banner[hidden] { display: none; }
+.sale-banner-item {
+  font: inherit;
+  color: var(--ink);
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 0.25rem 0.9rem;
+  text-align: center;
+}
+button.sale-banner-item { cursor: pointer; }
+button.sale-banner-item:hover, button.sale-banner-item:focus-visible { background: var(--brick); color: #fff; }
