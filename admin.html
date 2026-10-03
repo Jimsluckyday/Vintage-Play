@@ -789,6 +789,8 @@
         row.innerHTML = `
           <div class="info">
             <h4>Order — $${Number(order.total).toFixed(2)} <span class="meta">(${new Date(order.created_at).toLocaleString()})</span></h4>
+            ${order.customer_name || order.customer_contact ? `<div class="meta" style="font-weight:700;">${escapeHtml(order.customer_name || "")}${order.customer_contact ? ` &mdash; ${order.customer_contact.includes("@") ? `<a href="mailto:${escapeHtml(order.customer_contact)}">${escapeHtml(order.customer_contact)}</a>` : escapeHtml(order.customer_contact)}` : ""}</div>` : ""}
+            ${order.customer_notes ? `<div class="meta">Note: ${escapeHtml(order.customer_notes)}</div>` : ""}
             <div class="meta">${itemLines}</div>
             <div class="btn-row" style="margin-top:0.5rem;">
               <select data-order-status="${order.id}" style="width:auto;">

@@ -81,6 +81,17 @@
 
       <p class="shipping-note" id="shippingNoteText"></p>
 
+      <div class="section" style="padding:0;margin:0.75rem 0;">
+        <h3 style="font-size:0.95rem;margin:0 0 0.5rem;">How can we reach you?</h3>
+        <label for="cartName">Your name</label>
+        <input type="text" id="cartName" autocomplete="name" />
+        <label for="cartContact">Your email or phone number</label>
+        <input type="text" id="cartContact" autocomplete="email" />
+        <label for="cartNotes">Anything we should know? (optional)</label>
+        <textarea id="cartNotes" rows="2" placeholder="Pickup or shipping, best time to reach you, questions..."></textarea>
+        <p class="hint" style="margin-top:0.3rem;">Only used to reply to this request.</p>
+      </div>
+
       <div class="btn-row">
         <button class="btn" id="cartSendBtn">Send Order Request</button>
       </div>
@@ -1248,12 +1259,15 @@
       );
     }
 
-    function buildOrderSummaryText() {
+    function buildOrderSummaryText(customer) {
       const lines = cartLines();
       const total = lines.reduce((sum, { item, qty }) => sum + Number(item.asking_price) * qty, 0);
       const body = [
         "Order Request - Vintage Play Collectables",
         "",
+        ...(customer
+          ? [`From: ${customer.name}`, `Contact: ${customer.contact}`, ...(customer.notes ? [`Notes: ${customer.notes}`] : []), ""]
+          : []),
         ...lines.map(({ item, qty }) => `${qty}x ${item.title} - $${Number(item.asking_price).toFixed(2)} each = $${(Number(item.asking_price) * qty).toFixed(2)}`),
         "",
         `Total: $${total.toFixed(2)}`,
@@ -1395,6 +1409,17 @@
       const lines = cartLines();
       if (lines.length === 0) return;
 
+      // Without a way to reach the buyer there's nothing to reply to, so both are required.
+      const customer = {
+        name: document.getElementById("cartName").value.trim(),
+        contact: document.getElementById("cartContact").value.trim(),
+        notes: document.getElementById("cartNotes").value.trim(),
+      };
+      if (!customer.name || !customer.contact) {
+        statusEl.textContent = "Please add your name and an email or phone number so we can reply to you.";
+        return;
+      }
+
       btn.disabled = true;
       statusEl.textContent = "Sending...";
 
@@ -1403,14 +1428,30 @@
         id: item.id, title: item.title, qty, price: Number(item.asking_price),
       }));
       const summaryText = buildOrderSummaryText();
+      const emailedText = buildOrderSummaryText(customer);
 
-      const { error: dbError } = await supabaseClient.from("orders").insert({ items: orderItems, total });
+      let { error: dbError } = await supabaseClient.from("orders").insert({
+        items: orderItems,
+        total,
+        customer_name: customer.name,
+        customer_contact: customer.contact,
+        customer_notes: customer.notes || null,
+      });
+      if (dbError) {
+        // The contact columns may not exist yet -- keep saving the order itself, and
+        // the contact details still travel in the email below.
+        ({ error: dbError } = await supabaseClient.from("orders").insert({ items: orderItems, total }));
+      }
 
       let emailOk = true;
       try {
         await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-          message: summaryText,
+          message: emailedText,
           to_email: ORDER_NOTIFY_EMAIL,
+          // Lets "Reply" in the inbox go straight to the buyer when they gave an email.
+          reply_to: customer.contact.includes("@") ? customer.contact : "",
+          customer_name: customer.name,
+          customer_contact: customer.contact,
         });
       } catch (e) {
         emailOk = false;
@@ -1418,7 +1459,7 @@
 
       try {
         await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-          message: `New order request - $${total.toFixed(2)} - check your email or admin panel.`,
+          message: `New order request - $${total.toFixed(2)} from ${customer.name} - check your email or admin panel.`,
           to_email: SMS_GATEWAY_ADDRESS,
         });
       } catch (e) {
@@ -1439,7 +1480,7 @@
       } else if (!emailOk) {
         statusEl.textContent = "Request recorded! (Email notification failed, but it's saved.) Summary also copied to your clipboard.";
       } else {
-        statusEl.textContent = "Order request sent! Summary also copied to your clipboard in case you'd like to message too.";
+        statusEl.textContent = `Order request sent! We'll reply to ${customer.contact} soon. Summary also copied to your clipboard.`;
       }
     });
 
