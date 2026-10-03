@@ -845,7 +845,7 @@
     function buildCardInnerHtml(item) {
       const photo = item.photo_urls && item.photo_urls[0];
       return `
-        ${photo ? `<img src="${photo}" alt="${escapeHtml(item.title)}" data-item-id="${item.id}" />` : `<div class="no-photo">No photo</div>`}
+        ${photo ? `<img src="${photo}" alt="${escapeHtml(item.title)}" loading="lazy" decoding="async" data-item-id="${item.id}" />` : `<div class="no-photo">No photo</div>`}
         <div class="card-body">
           <span class="tag">${itemTagLabel(item)}</span>
           ${item.condition_grade === "New" ? `<span class="badge badge-new" style="align-self:flex-start;">NEW</span>` : ""}

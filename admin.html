@@ -1102,7 +1102,7 @@
             ? `Cost $${Number(item.cost_basis).toFixed(2)}`
             : `<span style="color:#c2452f;font-weight:700;">No cost set</span>`;
         row.innerHTML = `
-          ${photo ? `<img src="${photo}" alt="" data-zoom-photo="${photo}" />` : `<div class="no-photo" style="width:110px;height:110px;">No photo</div>`}
+          ${photo ? `<img src="${photo}" alt="" loading="lazy" decoding="async" data-zoom-photo="${photo}" />` : `<div class="no-photo" style="width:110px;height:110px;">No photo</div>`}
           <div class="info">
             <h4>${escapeHtml(item.title)} <span class="meta">(${categoryLabel(item.category)})</span> ${badges}</h4>
             <div class="meta" style="font-weight:600;color:#333;">${conditionTag ? escapeHtml(conditionTag) : "No condition set"}${item.variant_group ? ` &middot; group: ${escapeHtml(item.variant_group)}` : ""}${item.condition_notes ? ` &mdash; ${escapeHtml(item.condition_notes)}` : ""}</div>
@@ -1329,13 +1329,51 @@
 
     document.getElementById("cancelEditBtn").addEventListener("click", resetForm);
 
+    // Phone photos arrive at 3-8 MB each, which is what filled the free plan's
+    // 1 GB of storage and its bandwidth allowance. Downscale the long edge to
+    // 1600px (plenty for the cards and the lightbox) and re-encode as JPEG
+    // before uploading; anything already small, or not a plain photo, is
+    // uploaded untouched. Falls back to the original file if anything fails.
+    async function shrinkImage(file) {
+      const MAX_EDGE = 1600;
+      const SKIP_UNDER = 350 * 1024;
+      if (!file.type.startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml") return file;
+      try {
+        const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
+        const scale = Math.min(1, MAX_EDGE / Math.max(bmp.width, bmp.height));
+        if (scale === 1 && file.size < SKIP_UNDER) {
+          bmp.close();
+          return file;
+        }
+        const w = Math.round(bmp.width * scale);
+        const h = Math.round(bmp.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(bmp, 0, 0, w, h);
+        bmp.close();
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+        return blob && blob.size < file.size ? blob : file;
+      } catch (err) {
+        return file;
+      }
+    }
+
     async function uploadPhotos(files) {
       const urls = [];
       for (const file of files) {
+        const body = await shrinkImage(file);
         const extMatch = file.name.match(/\.[a-zA-Z0-9]+$/);
-        const ext = extMatch ? extMatch[0].toLowerCase() : "";
+        const ext = body === file ? (extMatch ? extMatch[0].toLowerCase() : "") : ".jpg";
         const path = `${crypto.randomUUID()}${ext}`;
-        const { error } = await supabaseClient.storage.from("item-photos").upload(path, file);
+        // File names are fresh UUIDs and never overwritten, so a one-year
+        // cache is safe -- repeat visitors stop re-downloading every photo.
+        const { error } = await supabaseClient.storage
+          .from("item-photos")
+          .upload(path, body, { cacheControl: "31536000", contentType: body.type || file.type || undefined });
         if (error) throw error;
         const { data } = supabaseClient.storage.from("item-photos").getPublicUrl(path);
         urls.push(data.publicUrl);
