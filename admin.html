@@ -1538,6 +1538,12 @@
             it.photo_urls = updated;
           }
 
+          // Category and subcategory tiles can use the same photo as a cover.
+          for (const table of ["categories", "brands"]) {
+            const { error: coverErr } = await supabaseClient.from(table).update({ cover_photo_url: newUrl }).eq("cover_photo_url", entry.url);
+            if (coverErr) throw coverErr;
+          }
+
           const { error: delErr } = await supabaseClient.storage.from("item-photos").remove([photoPathFromUrl(entry.url)]);
           if (delErr) {
             couldNotDelete++;
