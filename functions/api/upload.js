@@ -8,6 +8,11 @@ const SUPABASE_URL = "https://smgzxdgmrxykfwpyzyea.supabase.co";
 // identifies the project, it doesn't grant any access by itself.
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtZ3p4ZGdtcnh5a2Z3cHl6eWVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0Mjk2OTEsImV4cCI6MjEwNTAwNTY5MX0.HSS42x8_K5lLpT_qFjtBtn-_AqL9btP_kvtIK53X-Zc";
 
+// Photos are served straight from the bucket's custom domain, which Cloudflare
+// caches at its edge -- no function runs per image view. (The /img/* function
+// route still exists as a fallback for photos saved before this switch.)
+const PHOTO_BASE_URL = "https://img.vintageplay.ca";
+
 const MAX_BYTES = 6 * 1024 * 1024;
 const TYPES = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif" };
 
@@ -60,5 +65,5 @@ export async function onRequestPost({ request, env }) {
   await env.PHOTOS.put(key, await file.arrayBuffer(), {
     httpMetadata: { contentType: file.type, cacheControl: "public, max-age=31536000, immutable" },
   });
-  return json({ url: `/img/${key}`, key, size: file.size });
+  return json({ url: `${PHOTO_BASE_URL}/${key}`, key, size: file.size });
 }
