@@ -112,6 +112,14 @@
   <header>
     <img src="logo.png" alt="Vintage Play Collectables" class="site-logo" />
     <h1 class="visually-hidden">Vintage Play Collectables</h1>
+    <div class="header-promo" id="headerPromo">
+      <label for="headerPromoCode" class="visually-hidden">Promo code</label>
+      <div class="header-promo-row">
+        <input type="text" id="headerPromoCode" placeholder="Promo code" autocomplete="off" />
+        <button type="button" id="headerPromoBtn">Apply</button>
+      </div>
+      <p class="header-promo-status" id="headerPromoStatus" role="status"></p>
+    </div>
   </header>
 
   <div class="sale-banner" id="saleBanner" hidden></div>
@@ -1678,31 +1686,58 @@
       return parts.join(", ");
     }
 
+    function setPromoStatus(msg) {
+      document.getElementById("cartPromoStatus").textContent = msg;
+      document.getElementById("headerPromoStatus").textContent = msg;
+    }
+
+    function setPromoInputs(value) {
+      document.getElementById("cartPromoCode").value = value;
+      document.getElementById("headerPromoCode").value = value;
+    }
+
     async function applyPromoCode(codeText, { quiet = false } = {}) {
-      const statusEl = document.getElementById("cartPromoStatus");
       const code = (codeText || "").trim();
-      if (!code) return;
+      if (!code) {
+        // Applying an empty box removes a code that was applied earlier.
+        if (codePromo) {
+          codePromo = null;
+          try { sessionStorage.removeItem("vp_promo_code"); } catch (e) { /* ignore */ }
+          renderGrid();
+          renderCartPanel();
+          setPromoStatus("Promo code removed.");
+        }
+        return;
+      }
       const { data, error } = await supabaseClient.rpc("check_promo_code", { p_code: code });
       const promo = !error && data && data[0];
       if (!promo) {
-        if (!quiet) statusEl.textContent = "That code isn't valid or has expired.";
+        if (!quiet) setPromoStatus("That code isn't valid or has expired.");
         return;
       }
       codePromo = promo;
       try { sessionStorage.setItem("vp_promo_code", promo.code); } catch (e) { /* private mode -- fine */ }
-      document.getElementById("cartPromoCode").value = promo.code;
+      setPromoInputs(promo.code);
       renderGrid();
       renderCartPanel();
-      const qualifies = cartLines().some(({ item }) => bestPromoFor(item) === codePromo);
-      statusEl.textContent = qualifies
-        ? `Code ${promo.code} applied: ${Number(promo.percent)}% off ${promoScopeText(promo)}.`
-        : `Code ${promo.code} is valid (${Number(promo.percent)}% off ${promoScopeText(promo)}) -- nothing in your cart qualifies yet.`;
+      const qualifies = allItems.some((item) => bestPromoFor(item) === codePromo);
+      setPromoStatus(
+        qualifies
+          ? `Code ${promo.code} applied: ${Number(promo.percent)}% off ${promoScopeText(promo)}.`
+          : `Code ${promo.code} is valid (${Number(promo.percent)}% off ${promoScopeText(promo)}) but nothing in stock qualifies right now.`
+      );
     }
 
     document.getElementById("cartPromoApplyBtn").addEventListener("click", () =>
       applyPromoCode(document.getElementById("cartPromoCode").value)
     );
     document.getElementById("cartPromoCode").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") applyPromoCode(e.target.value);
+    });
+    document.getElementById("headerPromoBtn").addEventListener("click", () =>
+      applyPromoCode(document.getElementById("headerPromoCode").value)
+    );
+    document.getElementById("headerPromoCode").addEventListener("keydown", (e) => {
       if (e.key === "Enter") applyPromoCode(e.target.value);
     });
 

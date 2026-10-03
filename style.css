@@ -1191,8 +1191,9 @@ button {
   font-size: 0.85em;
   align-self: flex-start;
 }
-.price-sale { background: var(--brick); color: #fff; }
-.card-body .price.price-sale { background: var(--brick); color: #fff; }
+/* The sale price keeps its normal, readable price tag; list rows just turn it red. */
+.list-row .price.price-sale,
+.lb-variant-row .price.price-sale { color: var(--brick); font-weight: 800; }
 
 /* Live-sale strip under the logo */
 .sale-banner {
@@ -1218,3 +1219,50 @@ button {
 }
 button.sale-banner-item { cursor: pointer; }
 button.sale-banner-item:hover, button.sale-banner-item:focus-visible { background: var(--brick); color: #fff; }
+
+/* Promo code box in the top right of the header, under the Cart button */
+header { position: relative; }
+.header-promo {
+  margin: 0.75rem auto 0;
+  max-width: 16rem;
+}
+.header-promo-row { display: flex; gap: 0.35rem; }
+.header-promo input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+}
+.header-promo input::placeholder { text-transform: none; }
+.header-promo button {
+  background: var(--mustard);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-weight: 800;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.header-promo-status {
+  margin: 0.3rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  color: #fff;
+}
+.header-promo-status:empty { display: none; }
+@media (min-width: 760px) {
+  .header-promo {
+    position: absolute;
+    top: 58px;
+    right: 12px;
+    width: 15rem;
+    margin: 0;
+    text-align: left;
+  }
+}
