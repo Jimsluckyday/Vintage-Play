@@ -1,6 +1,6 @@
 // Bump this by 1 every time this file (or admin.html/index.html) is redeployed.
 // Lets the page detect and warn if the browser is running a stale cached copy.
-const LOCAL_VERSION = "74";
+const LOCAL_VERSION = "75";
 
 // Public site URL — used in the Kijiji/FB listing generator to point buyers back to the full catalog.
 const SITE_URL = "https://vintage-play.pages.dev";
@@ -68,7 +68,21 @@ function startVersionWatch() {
   if (label) label.textContent = LOCAL_VERSION;
   if (!banner) return;
 
-  refreshBtn?.addEventListener("click", () => location.reload());
+  // A plain reload can hand back a copy of config.js / style.css that the
+  // browser (or Cloudflare's default 4-hour browser cache on the custom domain)
+  // kept, so the banner would come straight back. Re-fetch them with
+  // cache: "reload" first so the stored copies are replaced, then reload.
+  refreshBtn?.addEventListener("click", async () => {
+    refreshBtn.disabled = true;
+    try {
+      await Promise.all(
+        ["/config.js", "/style.css", location.pathname].map((u) => fetch(u, { cache: "reload" }))
+      );
+    } catch (e) {
+      // offline or blocked -- fall through to a normal reload
+    }
+    location.reload();
+  });
 
   const check = async () => {
     if (await isNewerVersionAvailable()) banner.hidden = false;
