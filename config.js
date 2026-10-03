@@ -1,9 +1,9 @@
 // Bump this by 1 every time this file (or admin.html/index.html) is redeployed.
 // Lets the page detect and warn if the browser is running a stale cached copy.
-const LOCAL_VERSION = "76";
+const LOCAL_VERSION = "77";
 
 // Public site URL — used in the Kijiji/FB listing generator to point buyers back to the full catalog.
-const SITE_URL = "https://vintage-play.pages.dev";
+const SITE_URL = "https://www.vintageplay.ca";
 
 // Shown in the "Contact" panel so someone who finds the site without coming
 // from one of these listings (e.g. a shared link) can see where else this
