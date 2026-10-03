@@ -1448,10 +1448,10 @@
         await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
           message: emailedText,
           to_email: ORDER_NOTIFY_EMAIL,
-          // Lets "Reply" in the inbox go straight to the buyer when they gave an email.
-          reply_to: customer.contact.includes("@") ? customer.contact : "",
-          customer_name: customer.name,
-          customer_contact: customer.contact,
+          // The EmailJS template's From Name is {{name}} and its Reply To is {{email}},
+          // so "Reply" in the inbox goes straight to the buyer when they gave an email.
+          name: customer.name,
+          email: customer.contact.includes("@") ? customer.contact : "",
         });
       } catch (e) {
         emailOk = false;
@@ -1461,6 +1461,8 @@
         await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
           message: `New order request - $${total.toFixed(2)} from ${customer.name} - check your email or admin panel.`,
           to_email: SMS_GATEWAY_ADDRESS,
+          name: customer.name,
+          email: "",
         });
       } catch (e) {
         // text alert is a nice-to-have on top of email — don't fail the order over it
