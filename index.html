@@ -1458,17 +1458,6 @@
       }
 
       try {
-        await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-          message: `New order request - $${total.toFixed(2)} from ${customer.name} - check your email or admin panel.`,
-          to_email: SMS_GATEWAY_ADDRESS,
-          name: customer.name,
-          email: "",
-        });
-      } catch (e) {
-        // text alert is a nice-to-have on top of email — don't fail the order over it
-      }
-
-      try {
         await navigator.clipboard.writeText(summaryText);
       } catch (e) {
         // clipboard unavailable — not critical, the request may still have gone through
