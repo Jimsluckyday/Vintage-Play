@@ -199,7 +199,7 @@ main {
 .card-body .price {
   display: inline-block;
   align-self: flex-start;
-  font-family: 'Bangers', cursive;
+  font-family: 'Alfa Slab One', serif;
   font-size: 1.15rem;
   letter-spacing: 0.02em;
   background: var(--mustard);
@@ -521,7 +521,7 @@ summary.subcat-picker-section-label:hover {
 }
 
 .list-row .price {
-  font-family: 'Bangers', cursive;
+  font-family: 'Alfa Slab One', serif;
   font-size: 1rem;
   color: var(--ink);
   flex-shrink: 0;
@@ -676,7 +676,7 @@ summary.subcat-picker-section-label:hover {
 
 .cart-total {
   text-align: right;
-  font-family: 'Bangers', cursive;
+  font-family: 'Alfa Slab One', serif;
   font-size: 1.3rem;
   margin: 0.75rem 0;
 }
@@ -766,7 +766,7 @@ summary.subcat-picker-section-label:hover {
 }
 
 .lb-meta-row .price {
-  font-family: 'Bangers', cursive;
+  font-family: 'Alfa Slab One', serif;
   font-size: 1.25rem;
   background: var(--mustard);
   border: 2px solid var(--ink);
@@ -885,7 +885,7 @@ summary.subcat-picker-section-label:hover {
 }
 
 .lb-variant-row .price {
-  font-family: 'Bangers', cursive;
+  font-family: 'Alfa Slab One', serif;
   font-size: 1.1rem;
   background: var(--mustard);
   border: 2px solid var(--ink);
@@ -1308,3 +1308,12 @@ header { position: relative; }
 #newArrivalsGrid .card-body .price {
   font-size: 1.05rem;
 }
+
+/* Prices use Alfa Slab One: its 1 has a foot, so 1 and 7 can't be mixed up. It runs
+   wider than the comic font it replaced, so the card price is a touch smaller. */
+#grid .card-body .price,
+#newArrivalsGrid .card-body .price {
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+}
+.cart-total { letter-spacing: 0.01em; }
