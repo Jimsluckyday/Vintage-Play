@@ -1431,7 +1431,7 @@
         row.innerHTML = `
           ${photo ? `<img src="${photo}" alt="" loading="lazy" decoding="async" data-zoom-photo="${photo}" />` : `<div class="no-photo" style="width:110px;height:110px;">No photo</div>`}
           <div class="info">
-            <h4>${escapeHtml(item.title)} <span class="meta">(${categoryLabel(item.category)})</span> ${badges}</h4>
+            <h4>${escapeHtml(item.title)} <span class="meta">(${categoryLabel(item.category)}${subcatLabelHtml(item)})</span> ${badges}</h4>
             <div class="meta" style="font-weight:600;color:#333;">${conditionTag ? escapeHtml(conditionTag) : "No condition set"}${item.variant_group ? ` &middot; group: ${escapeHtml(item.variant_group)}` : ""}${item.condition_notes ? ` &mdash; ${escapeHtml(item.condition_notes)}` : ""}</div>
             <div class="meta">${money(Number(item.asking_price))} &middot; ${costLabel} &middot; Qty ${item.quantity} &middot; ${item.status}${item.price_checked_at ? ` &middot; Price checked ${new Date(item.price_checked_at).toLocaleDateString()}` : ""}</div>
             <div class="btn-row">
@@ -1520,6 +1520,18 @@
         return;
       }
       await loadItems();
+    }
+
+    // " > Microsoft > Xbox" after the category in the inventory list, so you can tell an Xbox
+    // game from a PS3 game at a glance. A game with no subcategory is flagged in red.
+    function subcatLabelHtml(item) {
+      const brand = item.brand ? ALL_BRANDS.find((b) => b.slug === item.brand) : null;
+      if (!brand) {
+        return item.brand
+          ? ` &rsaquo; ${escapeHtml(item.brand)}`
+          : ` &rsaquo; <span style="color:#c2452f;font-weight:700;">no subcategory</span>`;
+      }
+      return ` &rsaquo; ${brand.group_label ? `${escapeHtml(brand.group_label)} &rsaquo; ` : ""}${escapeHtml(brand.label)}`;
     }
 
     // Dollar amounts in the same slab font as the store prices, so 1 and 7 can't be confused.
