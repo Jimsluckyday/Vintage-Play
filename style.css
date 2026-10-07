@@ -1266,3 +1266,45 @@ header { position: relative; }
     text-align: left;
   }
 }
+
+/* Product cards: a fixed square photo frame so every card's divider line, title
+   and price sit at the same height no matter how each photo was shot. The whole
+   item stays visible (contain, not crop); a narrow strip of card colour fills the
+   gap on portrait or landscape photos. Five across on a wide screen. */
+#grid,
+#newArrivalsGrid {
+  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+  gap: 1rem;
+}
+
+#grid .card img,
+#newArrivalsGrid .card img {
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  background: var(--line);
+}
+
+#grid .card-body,
+#newArrivalsGrid .card-body {
+  padding: 0.7rem;
+  gap: 0.35rem;
+}
+
+#grid .card-body h3,
+#newArrivalsGrid .card-body h3 {
+  font-size: 0.9rem;
+  min-height: 2.6em;   /* always reserve two lines so prices line up across a row */
+}
+
+.card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: flex-start;
+  min-height: 1.5rem;  /* reserve one badge row, filled or not */
+}
+
+#grid .card-body .price,
+#newArrivalsGrid .card-body .price {
+  font-size: 1.05rem;
+}

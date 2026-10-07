@@ -992,11 +992,13 @@
         ${photo ? `<img src="${photo}" alt="${escapeHtml(item.title)}" loading="lazy" decoding="async" data-item-id="${item.id}" />` : `<div class="no-photo">No photo</div>`}
         <div class="card-body">
           <span class="tag">${itemTagLabel(item)}</span>
+          <div class="card-badges">
           ${item.condition_grade === "New" ? `<span class="badge badge-new" style="align-self:flex-start;">NEW</span>` : ""}
           ${item.highlight_note ? `<span class="badge badge-highlight" style="align-self:flex-start;">${escapeHtml(item.highlight_note)}</span>` : ""}
           ${item.promo_at ? `<span class="badge badge-sale" style="align-self:flex-start;">SALE</span>` : ""}
           ${discountBadgeHtml(item, "align-self:flex-start;")}
           ${Number(item.asking_price) >= RARE_THRESHOLD ? `<span class="badge badge-rare" style="align-self:flex-start;">RARE</span>` : ""}
+          </div>
           <h3>${escapeHtml(item.title)}</h3>
           <div class="card-bottom">
             ${priceHtml(item)}
