@@ -1307,20 +1307,50 @@
       // left out here rather than lumped into a misleading "Other" row; the
       // category table above already accounts for every item regardless.
       const byBrand = {};
+      const byKind = {};
       let brandedQty = 0, brandedValue = 0, brandedCost = 0;
+      // Video Games splits each platform into Games / Consoles / Accessories rows, so "PlayStation 1"
+      // never blurs a console count into a game count. Other categories (Comics...) keep one row.
+      const KIND_ORDER = { Games: 0, Consoles: 1, Accessories: 2 };
       inStock.forEach((i) => {
         if (!i.brand) return;
         const brandMeta = ALL_BRANDS.find((b) => b.slug === i.brand);
-        const label = brandMeta ? `${brandMeta.label} (${categoryLabel(i.category)})` : `${i.brand} (${categoryLabel(i.category)})`;
-        if (!byBrand[label]) byBrand[label] = { qty: 0, value: 0, cost: 0 };
+        const platform = brandMeta ? brandMeta.label : i.brand;
+        const typed = itemTypesForCategory(i.category).length > 0;
+        const kind = !typed ? null : i.item_type === "consoles" ? "Consoles" : i.item_type === "accessories" ? "Accessories" : "Games";
+        const label = kind ? `${platform} \u00b7 ${kind}` : `${platform} (${categoryLabel(i.category)})`;
+        if (!byBrand[label]) byBrand[label] = { qty: 0, value: 0, cost: 0, platform: `${i.category}|${i.brand}`, kind };
         byBrand[label].qty += qtyOf(i);
         byBrand[label].value += valueOf(i);
         byBrand[label].cost += costOf(i);
+        if (kind) {
+          if (!byKind[kind]) byKind[kind] = { qty: 0, value: 0, cost: 0 };
+          byKind[kind].qty += qtyOf(i);
+          byKind[kind].value += valueOf(i);
+          byKind[kind].cost += costOf(i);
+        }
         brandedQty += qtyOf(i);
         brandedValue += valueOf(i);
         brandedCost += costOf(i);
       });
-      const brandRows = Object.entries(byBrand).sort((a, b) => b[1].value - a[1].value);
+      // Each platform's rows stay together (Games, then Consoles, then Accessories); platforms are ordered by total value.
+      const platformValue = {};
+      Object.values(byBrand).forEach((v) => {
+        platformValue[v.platform] = (platformValue[v.platform] || 0) + v.value;
+      });
+      const brandRows = Object.entries(byBrand).sort(
+        (a, b) =>
+          platformValue[b[1].platform] - platformValue[a[1].platform] ||
+          a[1].platform.localeCompare(b[1].platform) ||
+          (KIND_ORDER[a[1].kind] ?? 9) - (KIND_ORDER[b[1].kind] ?? 9)
+      );
+      const kindRows = ["Games", "Consoles", "Accessories"]
+        .filter((k) => byKind[k])
+        .map(
+          (k) =>
+            `<tr style="font-weight:700;background:#fff0c9;"><td>All ${k.toLowerCase()} (every platform)</td><td>${byKind[k].qty}</td><td>${money(byKind[k].value)}</td><td>${money(byKind[k].cost)}</td><td>${money(byKind[k].value - byKind[k].cost)}</td></tr>`
+        )
+        .join("");
       document.getElementById("inventoryBrandTable").innerHTML = `
         <tr><th>Subcategory</th><th>Units in stock</th><th>Resale value</th><th>Cost basis</th><th>Est. profit</th></tr>
         ${brandRows
@@ -1329,6 +1359,7 @@
               `<tr><td>${escapeHtml(label)}</td><td>${v.qty}</td><td>${money(v.value)}</td><td>${money(v.cost)}</td><td>${money((v.value - v.cost))}</td></tr>`
           )
           .join("")}
+        ${kindRows}
         <tr class="summary-total-row"><td>Subtotal (has a subcategory)</td><td>${brandedQty}</td><td>${money(brandedValue)}</td><td>${money(brandedCost)}</td><td>${money((brandedValue - brandedCost))}</td></tr>
       `;
     }
