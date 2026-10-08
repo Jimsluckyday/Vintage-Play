@@ -1204,7 +1204,11 @@
     function populateInventoryCategoryFilter() {
       const select = document.getElementById("inventoryCategoryFilter");
       const previousValue = select.value;
-      const countIn = (cat, type) => items.filter((i) => i.category === cat && (type === "all" || itemMatchesType(i, type))).length;
+      const countIn = (cat, type) => {
+        const list = items.filter((i) => i.category === cat && (type === "all" || itemMatchesType(i, type)));
+        const units = list.reduce((t, i) => t + (Number(i.quantity) || 0), 0);
+        return `${list.length} listings, ${units} units`;
+      };
       let html = `<option value="all">All Categories</option>`;
       ALL_CATEGORIES.forEach((c) => {
         html += `<option value="${c.slug}">${escapeHtml(c.label)}</option>`;
@@ -1471,7 +1475,9 @@
       listEl.innerHTML = "";
 
       const countNote = document.getElementById("inventoryFilterNote");
-      countNote.textContent = `Showing ${shown.length} of ${filtered.length} matching items (${items.length} total in inventory).`;
+      // "Items" are listings; one listing can hold several units (12 NES consoles = 1 listing, quantity 12).
+      const filteredUnits = filtered.reduce((t, i) => t + (Number(i.quantity) || 0), 0);
+      countNote.textContent = `Showing ${shown.length} of ${filtered.length} matching listings (${filteredUnits} units). ${items.length} listings total in inventory.`;
 
       const loadMoreBtn = document.getElementById("inventoryLoadMoreBtn");
       loadMoreBtn.hidden = filtered.length <= shown.length;
