@@ -176,6 +176,12 @@
         <option value="">None</option>
       </select>
 
+      <div id="toteField" hidden>
+        <label for="tote">Tote (where it's stored, e.g. "Tote 1" -- leave blank for loose items)</label>
+        <input type="text" id="tote" list="toteOptions" placeholder="Tote 1" />
+        <datalist id="toteOptions"></datalist>
+      </div>
+
       <label for="condition_grade">Condition (optional — leave blank when New/Used doesn't apply, e.g. comics)</label>
       <select id="condition_grade">
         <option value="">Not specified</option>
@@ -271,6 +277,7 @@
         <input type="text" id="inventorySearch" placeholder="Search by title..." style="max-width:300px;" />
         <select id="inventoryCategoryFilter" style="max-width:220px;"></select>
         <select id="inventoryBrandFilter" style="max-width:220px;"></select>
+        <select id="inventoryToteFilter" style="max-width:170px;" hidden></select>
         <select id="inventorySortSelect" style="max-width:180px;">
           <option value="created_at">Newest First</option>
           <option value="title">Title (A-Z)</option>
@@ -280,6 +287,7 @@
         </label>
         <button type="button" class="btn secondary" id="inventoryPromoFilterBtn">Show Sale/Featured Only</button>
         <button type="button" class="btn secondary" id="inventoryHoldFilterBtn">Show On Hold Only</button>
+        <button type="button" class="btn secondary" id="inventoryMissingPhotoBtn">Show Missing Photos</button>
       </div>
       <div class="btn-row" id="inventoryLetterBar" style="margin-top:0.5rem;"></div>
       <p class="hint" id="inventoryFilterNote"></p>
@@ -763,6 +771,11 @@
       document.getElementById("inventoryHoldFilterBtn").classList.toggle("active", holdFilterOnly);
       resetInventoryPaging();
     });
+    document.getElementById("inventoryMissingPhotoBtn").addEventListener("click", () => {
+      missingPhotoOnly = !missingPhotoOnly;
+      resetInventoryPaging();
+    });
+    document.getElementById("inventoryToteFilter").addEventListener("change", resetInventoryPaging);
     document.getElementById("inventoryLoadMoreBtn").addEventListener("click", () => {
       inventoryPagesShown++;
       renderItemList();
@@ -1189,6 +1202,36 @@
     let inventoryPagesShown = 1;
     let promoFilterOnly = false;
     let holdFilterOnly = false;
+    // Items with no photo yet. Items on hold (waiting on repairs) are left out on purpose --
+    // they get photographed once they're fixed, or removed if they can't be.
+    let missingPhotoOnly = false;
+    // The tote column only exists after Inventory/tote_labels.sql has been run; until then the
+    // tote field and filter stay hidden so saving an item can't fail.
+    let toteColumnExists = false;
+
+    function hasPhoto(item) {
+      return !!(item.photo_urls && item.photo_urls.length);
+    }
+
+    function needsPhoto(item) {
+      return item.status !== "sold" && !item.on_hold_at && !hasPhoto(item);
+    }
+
+    function refreshToteControls() {
+      toteColumnExists = items.length > 0 && Object.prototype.hasOwnProperty.call(items[0], "tote");
+      document.getElementById("toteField").hidden = !toteColumnExists;
+      const filter = document.getElementById("inventoryToteFilter");
+      filter.hidden = !toteColumnExists;
+      if (!toteColumnExists) return;
+      const previous = filter.value || "all";
+      const totes = [...new Set(items.map((i) => (i.tote || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      filter.innerHTML =
+        `<option value="all">All totes</option>` +
+        totes.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("") +
+        `<option value="__none__">No tote</option>`;
+      filter.value = [...filter.options].some((o) => o.value === previous) ? previous : "all";
+      document.getElementById("toteOptions").innerHTML = totes.map((t) => `<option value="${escapeHtml(t)}"></option>`).join("");
+    }
     let inventorySort = "created_at";
     let inventoryLetterFilter = null;
 
@@ -1441,6 +1484,20 @@
       const { cat: categoryFilter, type: typeFilter } = parseCategoryFilter(document.getElementById("inventoryCategoryFilter").value);
       const brandFilter = document.getElementById("inventoryBrandFilter").value || "all";
       const photoOnly = document.getElementById("inventoryPhotoFilter").checked;
+      refreshToteControls();
+      const toteFilter = toteColumnExists ? document.getElementById("inventoryToteFilter").value || "all" : "all";
+
+      // Button label: how many items in the current category/subcategory still need a photo.
+      const scopeForPhotos = items.filter(
+        (i) =>
+          (categoryFilter === "all" || i.category === categoryFilter) &&
+          (brandFilter === "all" || i.brand === brandFilter) &&
+          itemMatchesType(i, typeFilter)
+      );
+      const missingCount = scopeForPhotos.filter(needsPhoto).length;
+      const missingBtn = document.getElementById("inventoryMissingPhotoBtn");
+      missingBtn.textContent = missingPhotoOnly ? `Showing ${missingCount} Missing Photos (click to show all)` : `Show Missing Photos (${missingCount})`;
+      missingBtn.classList.toggle("active", missingPhotoOnly);
 
       const preLetter = items.filter((item) => {
         const matchesSearch = !searchTerm || item.title.toLowerCase().includes(searchTerm);
@@ -1448,9 +1505,11 @@
         const matchesBrand = brandFilter === "all" || item.brand === brandFilter;
         const matchesType = itemMatchesType(item, typeFilter);
         const matchesPhoto = !photoOnly || (item.photo_urls && item.photo_urls.length > 0);
+        const matchesMissing = !missingPhotoOnly || needsPhoto(item);
+        const matchesTote = toteFilter === "all" || (toteFilter === "__none__" ? !(item.tote || "").trim() : (item.tote || "").trim() === toteFilter);
         const matchesPromo = !promoFilterOnly || item.featured_at || item.promo_at;
         const matchesHold = !holdFilterOnly || item.on_hold_at;
-        return matchesSearch && matchesCategory && matchesBrand && matchesType && matchesPhoto && matchesPromo && matchesHold;
+        return matchesSearch && matchesCategory && matchesBrand && matchesType && matchesPhoto && matchesMissing && matchesTote && matchesPromo && matchesHold;
       });
 
       renderInventoryLetterBar(preLetter);
@@ -1501,7 +1560,7 @@
           <div class="info">
             <h4>${escapeHtml(item.title)} <span class="meta">(${categoryLabel(item.category)}${itemTypeLabel(item) ? ` &rsaquo; <strong>${escapeHtml(itemTypeLabel(item))}</strong>` : ""}${subcatLabelHtml(item)})</span> ${badges}</h4>
             <div class="meta" style="font-weight:600;color:#333;">${conditionTag ? escapeHtml(conditionTag) : "No condition set"}${item.variant_group ? ` &middot; group: ${escapeHtml(item.variant_group)}` : ""}${item.condition_notes ? ` &mdash; ${escapeHtml(item.condition_notes)}` : ""}</div>
-            <div class="meta">${money(Number(item.asking_price))} &middot; ${costLabel} &middot; Qty ${item.quantity} &middot; ${item.status}${item.price_checked_at ? ` &middot; Price checked ${new Date(item.price_checked_at).toLocaleDateString()}` : ""}</div>
+            <div class="meta">${money(Number(item.asking_price))} &middot; ${costLabel}${item.tote ? ` &middot; <strong>${escapeHtml(item.tote)}</strong>` : ""} &middot; Qty ${item.quantity} &middot; ${item.status}${item.price_checked_at ? ` &middot; Price checked ${new Date(item.price_checked_at).toLocaleDateString()}` : ""}</div>
             <div class="btn-row">
               <button class="btn secondary" data-action="edit" data-id="${item.id}">Edit</button>
               <button class="btn danger" data-action="delete" data-id="${item.id}">Delete</button>
@@ -1713,6 +1772,7 @@
       document.getElementById("completeness").value = item.completeness || "";
       document.getElementById("variant_group").value = item.variant_group || "";
       document.getElementById("internal_notes").value = item.internal_notes || "";
+      document.getElementById("tote").value = item.tote || "";
       document.getElementById("release_year").value = item.release_year || "";
       document.getElementById("highlight_note").value = item.highlight_note || "";
       document.getElementById("condition_notes").value = item.condition_notes || "";
@@ -1742,6 +1802,7 @@
       document.getElementById("completeness").value = "";
       document.getElementById("variant_group").value = "";
       document.getElementById("internal_notes").value = "";
+      document.getElementById("tote").value = "";
       document.getElementById("release_year").value = "";
       document.getElementById("highlight_note").value = "";
       document.getElementById("condition_notes").value = "";
@@ -2019,6 +2080,7 @@
         completeness: document.getElementById("completeness").value.trim() || null,
         variant_group: document.getElementById("variant_group").value.trim() || null,
         internal_notes: document.getElementById("internal_notes").value.trim() || null,
+        ...(toteColumnExists ? { tote: document.getElementById("tote").value.trim() || null } : {}),
         release_year: document.getElementById("release_year").value.trim() || null,
         highlight_note: document.getElementById("highlight_note").value.trim() || null,
         condition_notes: document.getElementById("condition_notes").value.trim(),
