@@ -171,7 +171,7 @@
         <option value="">None</option>
       </select>
 
-      <label for="item_type">Item Type (optional — only used by categories set to the "Tree" style, e.g. Consoles/Games/Accessories within Video Games)</label>
+      <label for="item_type">Item Type (Video Games: pick <strong>Consoles</strong> for a console or <strong>Accessories</strong> for controllers/cables; leave blank or pick Games for a game. Consoles show in the store's Consoles section once released from hold.)</label>
       <select id="item_type">
         <option value="">None</option>
       </select>
@@ -271,6 +271,7 @@
         <input type="text" id="inventorySearch" placeholder="Search by title..." style="max-width:300px;" />
         <select id="inventoryCategoryFilter" style="max-width:220px;"></select>
         <select id="inventoryBrandFilter" style="max-width:220px;"></select>
+        <select id="inventoryTypeFilter" style="max-width:200px;"></select>
         <select id="inventorySortSelect" style="max-width:180px;">
           <option value="created_at">Newest First</option>
           <option value="title">Title (A-Z)</option>
@@ -742,6 +743,7 @@
       resetInventoryPaging();
     });
     document.getElementById("inventoryBrandFilter").addEventListener("change", resetInventoryPaging);
+    document.getElementById("inventoryTypeFilter").addEventListener("change", resetInventoryPaging);
     document.getElementById("inventoryPhotoFilter").addEventListener("change", resetInventoryPaging);
     document.getElementById("inventorySortSelect").addEventListener("change", (e) => {
       inventorySort = e.target.value;
@@ -1375,16 +1377,19 @@
       const searchTerm = document.getElementById("inventorySearch").value.trim().toLowerCase();
       const categoryFilter = document.getElementById("inventoryCategoryFilter").value;
       const brandFilter = document.getElementById("inventoryBrandFilter").value || "all";
+      populateInventoryTypeFilter();
+      const typeFilter = document.getElementById("inventoryTypeFilter").value || "all";
       const photoOnly = document.getElementById("inventoryPhotoFilter").checked;
 
       const preLetter = items.filter((item) => {
         const matchesSearch = !searchTerm || item.title.toLowerCase().includes(searchTerm);
         const matchesCategory = categoryFilter === "all" || item.category === categoryFilter;
         const matchesBrand = brandFilter === "all" || item.brand === brandFilter;
+        const matchesType = itemMatchesType(item, typeFilter);
         const matchesPhoto = !photoOnly || (item.photo_urls && item.photo_urls.length > 0);
         const matchesPromo = !promoFilterOnly || item.featured_at || item.promo_at;
         const matchesHold = !holdFilterOnly || item.on_hold_at;
-        return matchesSearch && matchesCategory && matchesBrand && matchesPhoto && matchesPromo && matchesHold;
+        return matchesSearch && matchesCategory && matchesBrand && matchesType && matchesPhoto && matchesPromo && matchesHold;
       });
 
       renderInventoryLetterBar(preLetter);
@@ -1431,7 +1436,7 @@
         row.innerHTML = `
           ${photo ? `<img src="${photo}" alt="" loading="lazy" decoding="async" data-zoom-photo="${photo}" />` : `<div class="no-photo" style="width:110px;height:110px;">No photo</div>`}
           <div class="info">
-            <h4>${escapeHtml(item.title)} <span class="meta">(${categoryLabel(item.category)}${subcatLabelHtml(item)})</span> ${badges}</h4>
+            <h4>${escapeHtml(item.title)} <span class="meta">(${categoryLabel(item.category)}${itemTypeLabel(item) ? ` &rsaquo; <strong>${escapeHtml(itemTypeLabel(item))}</strong>` : ""}${subcatLabelHtml(item)})</span> ${badges}</h4>
             <div class="meta" style="font-weight:600;color:#333;">${conditionTag ? escapeHtml(conditionTag) : "No condition set"}${item.variant_group ? ` &middot; group: ${escapeHtml(item.variant_group)}` : ""}${item.condition_notes ? ` &mdash; ${escapeHtml(item.condition_notes)}` : ""}</div>
             <div class="meta">${money(Number(item.asking_price))} &middot; ${costLabel} &middot; Qty ${item.quantity} &middot; ${item.status}${item.price_checked_at ? ` &middot; Price checked ${new Date(item.price_checked_at).toLocaleDateString()}` : ""}</div>
             <div class="btn-row">
@@ -1520,6 +1525,43 @@
         return;
       }
       await loadItems();
+    }
+
+    function itemTypeLabel(item) {
+      // A game with no type set still counts as a game, so say so -- keeps every Video Games row labelled.
+      if (!item.item_type) {
+        const games = itemTypesForCategory(item.category).find((t) => t.slug === "games");
+        return games ? games.label : "";
+      }
+      const t = ALL_ITEM_TYPES.find((x) => x.slug === item.item_type && x.category === item.category) || ALL_ITEM_TYPES.find((x) => x.slug === item.item_type);
+      return t ? t.label : item.item_type;
+    }
+
+    // Does an item belong to the chosen type? Games with no type set count as "Games".
+    function itemMatchesType(item, typeSlug) {
+      if (!typeSlug || typeSlug === "all") return true;
+      if (typeSlug === "games") return item.item_type === "games" || (!item.item_type && itemTypesForCategory(item.category).some((t) => t.slug === "games"));
+      return item.item_type === typeSlug;
+    }
+
+    // "All types / Consoles (31) / Games (595) / Accessories" -- types are defined per category, so
+    // this lists the types of whichever category is selected (or all of them), with counts.
+    function populateInventoryTypeFilter() {
+      const select = document.getElementById("inventoryTypeFilter");
+      const previous = select.value || "all";
+      const cat = document.getElementById("inventoryCategoryFilter").value || "all";
+      const types = ALL_ITEM_TYPES.filter((t) => cat === "all" || t.category === cat);
+      const seen = new Set();
+      const unique = types.filter((t) => (seen.has(t.slug) ? false : (seen.add(t.slug), true)));
+      const inScope = items.filter((i) => cat === "all" || i.category === cat);
+      select.hidden = unique.length === 0;
+      select.innerHTML =
+        `<option value="all">All types</option>` +
+        unique
+          .sort((a, b) => a.label.localeCompare(b.label))
+          .map((t) => `<option value="${t.slug}">${escapeHtml(t.label)} (${inScope.filter((i) => itemMatchesType(i, t.slug)).length})</option>`)
+          .join("");
+      select.value = unique.some((t) => t.slug === previous) ? previous : "all";
     }
 
     // " > Microsoft > Xbox" after the category in the inventory list, so you can tell an Xbox
