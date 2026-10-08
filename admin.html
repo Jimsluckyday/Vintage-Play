@@ -265,28 +265,12 @@
       <table class="summary-table" id="inventoryBrandTable"></table>
     </div>
 
-    <div class="section" id="consolePanel">
-      <h2>Consoles (<span id="consoleUnitCount">0</span> units)</h2>
-      <p class="hint" id="consoleSummary"></p>
-      <div class="btn-row" style="align-items:center;">
-        <input type="text" id="consoleSearch" placeholder="Search consoles..." style="max-width:260px;" />
-        <button type="button" class="btn secondary" data-console-filter="all">All</button>
-        <button type="button" class="btn secondary" data-console-filter="hold">On hold</button>
-        <button type="button" class="btn secondary" data-console-filter="live">Live on the site</button>
-      </div>
-      <div style="overflow-x:auto;margin-top:0.5rem;">
-        <table class="summary-table" id="consoleTable"></table>
-      </div>
-      <p class="hint">To add a console, use the form below and set <strong>Item Type</strong> to <strong>Consoles</strong>. Release the hold only after it has been tested and photographed.</p>
-    </div>
-
     <div class="section">
       <h2>Inventory (<span id="itemCount">0</span>)</h2>
       <div class="btn-row">
         <input type="text" id="inventorySearch" placeholder="Search by title..." style="max-width:300px;" />
         <select id="inventoryCategoryFilter" style="max-width:220px;"></select>
         <select id="inventoryBrandFilter" style="max-width:220px;"></select>
-        <select id="inventoryTypeFilter" style="max-width:200px;"></select>
         <select id="inventorySortSelect" style="max-width:180px;">
           <option value="created_at">Newest First</option>
           <option value="title">Title (A-Z)</option>
@@ -758,7 +742,6 @@
       resetInventoryPaging();
     });
     document.getElementById("inventoryBrandFilter").addEventListener("change", resetInventoryPaging);
-    document.getElementById("inventoryTypeFilter").addEventListener("change", resetInventoryPaging);
     document.getElementById("inventoryPhotoFilter").addEventListener("change", resetInventoryPaging);
     document.getElementById("inventorySortSelect").addEventListener("change", (e) => {
       inventorySort = e.target.value;
@@ -1209,13 +1192,31 @@
     let inventorySort = "created_at";
     let inventoryLetterFilter = null;
 
+    // The Category drop-down lists each category, then (for categories with item types, like Video
+    // Games) one indented entry per type: "Video Games > Consoles (31)". Picking one scopes the whole
+    // inventory list to just that type -- the way you'd pull up any other group of games.
+    // Option values are "games" for a whole category and "games::consoles" for a type within it.
+    function parseCategoryFilter(value) {
+      const [cat, type] = (value || "all").split("::");
+      return { cat: cat || "all", type: type || "all" };
+    }
+
     function populateInventoryCategoryFilter() {
       const select = document.getElementById("inventoryCategoryFilter");
       const previousValue = select.value;
-      select.innerHTML =
-        `<option value="all">All Categories</option>` +
-        ALL_CATEGORIES.map((c) => `<option value="${c.slug}">${c.label}</option>`).join("");
-      if (previousValue) select.value = previousValue;
+      const countIn = (cat, type) => items.filter((i) => i.category === cat && (type === "all" || itemMatchesType(i, type))).length;
+      let html = `<option value="all">All Categories</option>`;
+      ALL_CATEGORIES.forEach((c) => {
+        html += `<option value="${c.slug}">${escapeHtml(c.label)}</option>`;
+        itemTypesForCategory(c.slug)
+          .slice()
+          .sort((a, b) => a.label.localeCompare(b.label))
+          .forEach((t) => {
+            html += `<option value="${c.slug}::${t.slug}">\u00a0\u00a0\u21b3 ${escapeHtml(c.label)} \u203a ${escapeHtml(t.label)} (${countIn(c.slug, t.slug)})</option>`;
+          });
+      });
+      select.innerHTML = html;
+      if (previousValue && [...select.options].some((o) => o.value === previousValue)) select.value = previousValue;
     }
 
     // Scoped to the current category filter so picking "PS1" vs "PS3" is a
@@ -1224,11 +1225,15 @@
     // category chosen, every brand is listed with its category for context.
     function populateInventoryBrandFilter() {
       const select = document.getElementById("inventoryBrandFilter");
-      const categoryFilter = document.getElementById("inventoryCategoryFilter").value || "all";
+      const { cat: categoryFilter, type: typeFilter } = parseCategoryFilter(document.getElementById("inventoryCategoryFilter").value);
       const previousValue = select.value;
-      const brands = categoryFilter === "all"
+      let brands = categoryFilter === "all"
         ? ALL_BRANDS
         : ALL_BRANDS.filter((b) => b.category === categoryFilter);
+      // Inside "Video Games > Consoles", only list the platforms that actually have a console.
+      if (typeFilter !== "all") {
+        brands = brands.filter((b) => items.some((i) => i.category === categoryFilter && i.brand === b.slug && itemMatchesType(i, typeFilter)));
+      }
       const sorted = [...brands].sort((a, b) => a.label.localeCompare(b.label));
       const optionLabel = (b) => (categoryFilter === "all" ? `${b.label} (${categoryLabel(b.category)})` : b.label);
       select.innerHTML =
@@ -1422,101 +1427,15 @@
     }
 
 
-    // ---- Consoles panel: every console in one place, with what's on hold ----
-    let consoleFilter = "all"; // all | hold | live
-
-    function renderConsolePanel() {
-      const panel = document.getElementById("consolePanel");
-      if (!panel) return;
-      const consoles = items.filter((i) => i.item_type === "consoles" && i.status !== "sold");
-      const units = (list) => list.reduce((t, i) => t + (Number(i.quantity) || 0), 0);
-      const held = consoles.filter((i) => i.on_hold_at);
-      const live = consoles.filter((i) => !i.on_hold_at);
-      const value = consoles.reduce((t, i) => t + (Number(i.asking_price) || 0) * (Number(i.quantity) || 0), 0);
-      document.getElementById("consoleUnitCount").textContent = units(consoles);
-      document.getElementById("consoleSummary").innerHTML =
-        `<strong>${consoles.length}</strong> listings &middot; <strong style="color:#c2452f;">${units(held)} units on hold</strong> (${held.length} listings) &middot; ` +
-        `<strong style="color:#2f7d78;">${units(live)} units live</strong> (${live.length} listings) &middot; resale value ${money(value)}`;
-
-      panel.querySelectorAll("[data-console-filter]").forEach((b) => {
-        b.className = b.dataset.consoleFilter === consoleFilter ? "btn" : "btn secondary";
-      });
-
-      const term = document.getElementById("consoleSearch").value.trim().toLowerCase();
-      const makerPlatform = (i) => {
-        const b = ALL_BRANDS.find((x) => x.slug === i.brand);
-        return { maker: b ? b.group_label || "" : "", platform: b ? b.label : i.brand || "" };
-      };
-      const shown = consoles
-        .filter((i) => (consoleFilter === "hold" ? i.on_hold_at : consoleFilter === "live" ? !i.on_hold_at : true))
-        .filter((i) => {
-          const mp = makerPlatform(i);
-          return !term || `${i.title} ${mp.maker} ${mp.platform}`.toLowerCase().includes(term);
-        })
-        .sort((a, b) => {
-          const x = makerPlatform(a), y = makerPlatform(b);
-          return x.maker.localeCompare(y.maker) || x.platform.localeCompare(y.platform) || a.title.localeCompare(b.title);
-        });
-
-      const table = document.getElementById("consoleTable");
-      if (!shown.length) {
-        table.innerHTML = `<tr><td>${consoles.length ? "No consoles match." : "No consoles yet."}</td></tr>`;
-        return;
-      }
-      table.innerHTML =
-        `<tr><th>Console</th><th>Platform</th><th>Qty</th><th>Price</th><th>Status</th><th></th></tr>` +
-        shown
-          .map((i) => {
-            const mp = makerPlatform(i);
-            const status = i.on_hold_at
-              ? `<strong style="color:#c2452f;">ON HOLD</strong>`
-              : `<strong style="color:#2f7d78;">LIVE</strong>`;
-            return `<tr>
-              <td>${escapeHtml(i.title)}</td>
-              <td>${escapeHtml(mp.maker ? `${mp.maker} › ${mp.platform}` : mp.platform)}</td>
-              <td>${Number(i.quantity) || 0}</td>
-              <td>${money(Number(i.asking_price) || 0)}</td>
-              <td>${status}</td>
-              <td style="white-space:nowrap;">
-                <button type="button" class="btn secondary" data-console-edit="${i.id}" style="margin-top:0;padding:0.2rem 0.6rem;font-size:0.8rem;">Edit</button>
-                <button type="button" class="btn ${i.on_hold_at ? "" : "secondary"}" data-console-hold="${i.id}" style="margin-top:0;padding:0.2rem 0.6rem;font-size:0.8rem;">${i.on_hold_at ? "Release hold" : "Put on hold"}</button>
-              </td>
-            </tr>`;
-          })
-          .join("");
-    }
-
-    document.getElementById("consolePanel").addEventListener("click", (e) => {
-      const f = e.target.closest("[data-console-filter]");
-      if (f) {
-        consoleFilter = f.dataset.consoleFilter;
-        renderConsolePanel();
-        return;
-      }
-      const ed = e.target.closest("[data-console-edit]");
-      if (ed) {
-        startEdit(ed.dataset.consoleEdit);
-        return;
-      }
-      const hold = e.target.closest("[data-console-hold]");
-      if (hold) {
-        const item = items.find((i) => i.id === hold.dataset.consoleHold);
-        if (item && !item.on_hold_at) toggleFlag(item.id, "on_hold_at");
-        else if (item && confirm(`Release the hold on "${item.title}"? It will show on the public site.`)) toggleFlag(item.id, "on_hold_at");
-      }
-    });
-    document.getElementById("consoleSearch").addEventListener("input", renderConsolePanel);
-
     function renderItemList() {
       renderInventorySummary();
-      renderConsolePanel();
       document.getElementById("itemCount").textContent = items.length;
 
       const searchTerm = document.getElementById("inventorySearch").value.trim().toLowerCase();
-      const categoryFilter = document.getElementById("inventoryCategoryFilter").value;
+      // Keep the "Video Games > Consoles (31)" counts current, then read the combined filter value.
+      populateInventoryCategoryFilter();
+      const { cat: categoryFilter, type: typeFilter } = parseCategoryFilter(document.getElementById("inventoryCategoryFilter").value);
       const brandFilter = document.getElementById("inventoryBrandFilter").value || "all";
-      populateInventoryTypeFilter();
-      const typeFilter = document.getElementById("inventoryTypeFilter").value || "all";
       const photoOnly = document.getElementById("inventoryPhotoFilter").checked;
 
       const preLetter = items.filter((item) => {
@@ -1680,26 +1599,6 @@
       if (!typeSlug || typeSlug === "all") return true;
       if (typeSlug === "games") return item.item_type === "games" || (!item.item_type && itemTypesForCategory(item.category).some((t) => t.slug === "games"));
       return item.item_type === typeSlug;
-    }
-
-    // "All types / Consoles (31) / Games (595) / Accessories" -- types are defined per category, so
-    // this lists the types of whichever category is selected (or all of them), with counts.
-    function populateInventoryTypeFilter() {
-      const select = document.getElementById("inventoryTypeFilter");
-      const previous = select.value || "all";
-      const cat = document.getElementById("inventoryCategoryFilter").value || "all";
-      const types = ALL_ITEM_TYPES.filter((t) => cat === "all" || t.category === cat);
-      const seen = new Set();
-      const unique = types.filter((t) => (seen.has(t.slug) ? false : (seen.add(t.slug), true)));
-      const inScope = items.filter((i) => cat === "all" || i.category === cat);
-      select.hidden = unique.length === 0;
-      select.innerHTML =
-        `<option value="all">All types</option>` +
-        unique
-          .sort((a, b) => a.label.localeCompare(b.label))
-          .map((t) => `<option value="${t.slug}">${escapeHtml(t.label)} (${inScope.filter((i) => itemMatchesType(i, t.slug)).length})</option>`)
-          .join("");
-      select.value = unique.some((t) => t.slug === previous) ? previous : "all";
     }
 
     // " > Microsoft > Xbox" after the category in the inventory list, so you can tell an Xbox
