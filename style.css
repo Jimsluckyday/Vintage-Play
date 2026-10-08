@@ -1351,3 +1351,8 @@ header { position: relative; }
 .kind-switch button.active { background: var(--mustard); }
 .kind-switch[hidden], .kind-hint[hidden] { display: none; }
 .kind-hint { margin: 0 0 0.75rem; font-size: 0.9rem; color: var(--ink-soft); }
+
+.maker-switch { margin-top: -0.25rem; }
+.maker-switch button { font-size: 0.8rem; padding: 0.25rem 0.8rem; border-width: 2px; background: #fff; }
+.maker-switch button.active { background: var(--teal); color: #fff; border-color: var(--ink); }
+.maker-switch[hidden] { display: none; }

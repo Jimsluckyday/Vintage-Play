@@ -135,6 +135,7 @@
     </div>
     <div class="list-toolbar" id="listToolbar">
       <div class="kind-switch" id="kindSwitch" hidden></div>
+      <div class="kind-switch maker-switch" id="makerSwitch" hidden></div>
       <p class="kind-hint" id="kindHint" hidden></p>
       <div class="subcat-picker" id="subcatPicker" hidden>
         <button type="button" class="subcat-picker-toggle" id="subcatToggle"></button>
@@ -312,6 +313,8 @@
     // "consoles" | "games" | null (everything). Only used in a category that sells consoles
     // (Video Games): lets a shopper look at the consoles first, then jump to that console's games.
     let activeKind = null;
+    // Console maker heading (Nintendo, Sega, Sony...) picked inside the Consoles view.
+    let activeMaker = null;
     let searchTerm = "";
     let activeLetter = null;
     let activeSort = "title";
@@ -332,6 +335,19 @@
       return true;
     }
 
+    function makerOf(item) {
+      const b = ALL_BRANDS.find((x) => x.slug === item.brand);
+      return b ? b.group_label || b.label : "Other";
+    }
+
+    function makerMatches(item) {
+      return activeKind !== "consoles" || !activeMaker || makerOf(item) === activeMaker;
+    }
+
+    function consolesAvailable() {
+      return allItems.some((i) => i.item_type === "consoles");
+    }
+
     function categoryHasConsoles(slug) {
       return allItems.some((i) => i.category === slug && i.item_type === "consoles");
     }
@@ -340,6 +356,7 @@
       activeBrand = null;
       activeItemType = null;
       activeKind = null;
+      activeMaker = null;
       searchTerm = "";
       activeLetter = null;
       document.getElementById("itemSearch").value = "";
@@ -377,15 +394,33 @@
       const gamesIndex = options.findIndex((o) => o.slug === "games");
       const rareOption = { slug: RARE_SLUG, label: "Rare Finds", rare: true };
       options.splice(gamesIndex === -1 ? options.length : gamesIndex + 1, 0, rareOption);
+      // A Consoles shortcut right after Video Games, shown only once a console is actually for sale.
+      if (consolesAvailable()) {
+        const at = options.findIndex((o) => o.slug === "games");
+        options.splice(at + 1, 0, { slug: "__consoles__", label: "Consoles", consoles: true });
+      }
 
       filtersEl.innerHTML = "";
       options.forEach((opt) => {
         const btn = document.createElement("button");
         btn.textContent = opt.label;
-        btn.className = [opt.slug === activeCategory ? "active" : "", opt.rare ? "rare-finds" : ""]
+        const isActive = opt.consoles
+          ? activeCategory === "games" && activeKind === "consoles"
+          : opt.slug === "games"
+            ? activeCategory === "games" && activeKind !== "consoles"
+            : opt.slug === activeCategory;
+        btn.className = [isActive ? "active" : "", opt.rare ? "rare-finds" : ""]
           .filter(Boolean)
           .join(" ");
         btn.addEventListener("click", () => {
+          if (opt.consoles) {
+            activeCategory = "games";
+            resetDrilldown();
+            activeKind = "consoles";
+            renderFilters();
+            renderGrid();
+            return;
+          }
           activeCategory = opt.slug;
           resetDrilldown();
           renderFilters();
@@ -646,9 +681,11 @@
     function renderKindSwitch() {
       const el = document.getElementById("kindSwitch");
       const hint = document.getElementById("kindHint");
+      const makerEl = document.getElementById("makerSwitch");
       const show = activeCategory !== "all" && activeCategory !== RARE_SLUG && categoryHasConsoles(activeCategory);
       if (!show) {
         el.hidden = true;
+        makerEl.hidden = true;
         hint.hidden = true;
         if (activeCategory === "all") activeKind = null;
         return;
@@ -663,6 +700,26 @@
         pill("consoles", `Consoles (${nConsoles})`) +
         pill("games", `Games (${nGames})`);
       el.hidden = false;
+
+      // Console makers (Nintendo, Sega, Sony, Microsoft, Atari), only inside the Consoles view.
+      if (activeKind === "consoles") {
+        const counts = {};
+        inCat.filter((i) => i.item_type === "consoles").forEach((i) => {
+          const m = makerOf(i);
+          counts[m] = (counts[m] || 0) + 1;
+        });
+        const makers = Object.keys(counts).sort((a, b) => a.localeCompare(b));
+        if (makers.length > 1) {
+          makerEl.innerHTML =
+            `<button type="button" data-maker="" class="${activeMaker ? "" : "active"}">All makers</button>` +
+            makers.map((m) => `<button type="button" data-maker="${escapeHtml(m)}" class="${activeMaker === m ? "active" : ""}">${escapeHtml(m)} (${counts[m]})</button>`).join("");
+          makerEl.hidden = false;
+        } else {
+          makerEl.hidden = true;
+        }
+      } else {
+        makerEl.hidden = true;
+      }
 
       hint.hidden = true;
       const brand = activeBrand && activeBrand !== "__none__" ? ALL_BRANDS.find((b) => b.slug === activeBrand) : null;
@@ -681,10 +738,19 @@
       }
     }
 
+    document.getElementById("makerSwitch").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-maker]");
+      if (!btn) return;
+      activeMaker = btn.dataset.maker || null;
+      activeBrand = null;
+      activeLetter = null;
+      renderGrid();
+    });
     document.getElementById("kindSwitch").addEventListener("click", (e) => {
       const btn = e.target.closest("[data-kind]");
       if (!btn) return;
       activeKind = btn.dataset.kind || null;
+      activeMaker = null;
       activeBrand = null;
       activeLetter = null;
       renderGrid();
@@ -703,7 +769,7 @@
       const bodyEl = document.getElementById("subcatBody");
       let brands = currentCategoryBrands();
       // With Consoles or Games chosen, only list the platforms that have that kind of item.
-      if (activeKind) brands = brands.filter((b) => allItems.some((i) => i.category === activeCategory && i.brand === b.slug && kindMatches(i)));
+      if (activeKind) brands = brands.filter((b) => allItems.some((i) => i.category === activeCategory && i.brand === b.slug && kindMatches(i) && makerMatches(i)));
       const usesDropdown = categoryUsesDropdown(activeCategory) && brands.length > 0;
       pickerEl.hidden = !usesDropdown;
       if (!usesDropdown) return;
@@ -715,8 +781,8 @@
         : activeKind === "consoles" ? "All Consoles" : activeKind === "games" ? "All Games" : `All ${categoryLabel(activeCategory)}`;
       toggleEl.textContent = `${currentLabel} ▾`;
 
-      const totalCount = allItems.filter((i) => i.category === activeCategory && kindMatches(i)).length;
-      const otherCount = allItems.filter((i) => i.category === activeCategory && !i.brand && kindMatches(i)).length;
+      const totalCount = allItems.filter((i) => i.category === activeCategory && kindMatches(i) && makerMatches(i)).length;
+      const otherCount = allItems.filter((i) => i.category === activeCategory && !i.brand && kindMatches(i) && makerMatches(i)).length;
       const allLabel = activeKind === "consoles" ? "All Consoles" : activeKind === "games" ? "All Games" : `All ${categoryLabel(activeCategory)}`;
       const allBtn = `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="">${escapeHtml(allLabel)} <span class="subcat-picker-count">(${totalCount})</span></button>`;
       const otherBtn = `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="__none__">Other / Uncategorized <span class="subcat-picker-count">(${otherCount})</span></button>`;
@@ -948,7 +1014,7 @@
       const scopedItems = allItems.filter((item) => {
         if (isRareView) return Number(item.asking_price) >= RARE_THRESHOLD;
         if (activeCategory !== "all" && item.category !== activeCategory) return false;
-        if (activeKind && activeCategory !== "all" && !kindMatches(item)) return false;
+        if (activeKind && activeCategory !== "all" && !(kindMatches(item) && makerMatches(item))) return false;
         if (leafSelected) {
           const itemTypesKnown = new Set(itemTypesForCategory(activeCategory).map((t) => t.slug));
           const matchesType =
@@ -1135,6 +1201,8 @@
         scopedItems.map((item) => item.title.trim()[0]?.toUpperCase()).filter(Boolean)
       );
       letterBarEl.innerHTML = "";
+      // A-Z jump bar is overkill for a short console list, and it crowds the filters above it.
+      if (activeKind === "consoles") return;
 
       const allBtn = document.createElement("button");
       allBtn.textContent = "All";
@@ -1758,6 +1826,7 @@
         offset += pageSize;
       }
       allItems = allData;
+      renderFilters();
       renderGrid();
     }
 
