@@ -1318,7 +1318,12 @@
         const platform = brandMeta ? brandMeta.label : i.brand;
         const typed = itemTypesForCategory(i.category).length > 0;
         const kind = !typed ? null : i.item_type === "consoles" ? "Consoles" : i.item_type === "accessories" ? "Accessories" : "Games";
-        const label = kind ? `${platform} \u00b7 ${kind}` : `${platform} (${categoryLabel(i.category)})`;
+        // A platform already named "... Games" (Electronic Tabletop Games) doesn't need "\u00b7 Games" added.
+        const label = kind
+          ? kind === "Games" && /games$/i.test(platform)
+            ? platform
+            : `${platform} \u00b7 ${kind}`
+          : `${platform} (${categoryLabel(i.category)})`;
         if (!byBrand[label]) byBrand[label] = { qty: 0, value: 0, cost: 0, platform: `${i.category}|${i.brand}`, kind };
         byBrand[label].qty += qtyOf(i);
         byBrand[label].value += valueOf(i);
