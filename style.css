@@ -1330,3 +1330,24 @@ header { position: relative; }
   font-family: 'Alfa Slab One', serif;
   letter-spacing: 0.02em;
 }
+
+/* Consoles / Games switch inside a category that sells consoles */
+.kind-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.kind-switch button {
+  background: var(--bg-card);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 0.35rem 0.95rem;
+  font-weight: 800;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.kind-switch button.active { background: var(--mustard); }
+.kind-switch[hidden], .kind-hint[hidden] { display: none; }
+.kind-hint { margin: 0 0 0.75rem; font-size: 0.9rem; color: var(--ink-soft); }

@@ -134,6 +134,8 @@
       </div>
     </div>
     <div class="list-toolbar" id="listToolbar">
+      <div class="kind-switch" id="kindSwitch" hidden></div>
+      <p class="kind-hint" id="kindHint" hidden></p>
       <div class="subcat-picker" id="subcatPicker" hidden>
         <button type="button" class="subcat-picker-toggle" id="subcatToggle"></button>
         <div class="subcat-picker-panel" id="subcatPanel" hidden>
@@ -307,6 +309,9 @@
     let activeCategory = "all";
     let activeBrand = null;
     let activeItemType = null;
+    // "consoles" | "games" | null (everything). Only used in a category that sells consoles
+    // (Video Games): lets a shopper look at the consoles first, then jump to that console's games.
+    let activeKind = null;
     let searchTerm = "";
     let activeLetter = null;
     let activeSort = "title";
@@ -321,9 +326,20 @@
     // and that top tier is exactly what should count as rare.
     const RARE_THRESHOLD = 49.99;
 
+    function kindMatches(item) {
+      if (activeKind === "consoles") return item.item_type === "consoles";
+      if (activeKind === "games") return item.item_type !== "consoles";
+      return true;
+    }
+
+    function categoryHasConsoles(slug) {
+      return allItems.some((i) => i.category === slug && i.item_type === "consoles");
+    }
+
     function resetDrilldown() {
       activeBrand = null;
       activeItemType = null;
+      activeKind = null;
       searchTerm = "";
       activeLetter = null;
       document.getElementById("itemSearch").value = "";
@@ -520,7 +536,7 @@
     // the global picker, which passes one category's brands at a time already
     // scoped by the caller's own loop variable.
     function buildBrandPickerSectionHtml(brands, sectionLabel, categorySlug, withOther = false) {
-      const countFor = (b) => allItems.filter((i) => i.category === categorySlug && i.brand === b.slug).length;
+      const countFor = (b) => allItems.filter((i) => i.category === categorySlug && i.brand === b.slug && kindMatches(i)).length;
       const leafHtml = (b) =>
         `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="${b.slug}">${escapeHtml(b.label)} <span class="subcat-picker-count">(${countFor(b)})</span></button>`;
 
@@ -625,11 +641,69 @@
       wireSubcatPickerSearch(searchEl, bodyEl);
     }
 
+    // "All Video Games | Consoles | Games" pills, shown only once a console is actually for sale,
+    // plus a one-line nudge between a console and its games (and back).
+    function renderKindSwitch() {
+      const el = document.getElementById("kindSwitch");
+      const hint = document.getElementById("kindHint");
+      const show = activeCategory !== "all" && activeCategory !== RARE_SLUG && categoryHasConsoles(activeCategory);
+      if (!show) {
+        el.hidden = true;
+        hint.hidden = true;
+        if (activeCategory === "all") activeKind = null;
+        return;
+      }
+      const inCat = allItems.filter((i) => i.category === activeCategory);
+      const nConsoles = inCat.filter((i) => i.item_type === "consoles").length;
+      const nGames = inCat.length - nConsoles;
+      const pill = (kind, label) =>
+        `<button type="button" data-kind="${kind}" class="${(activeKind || "") === kind ? "active" : ""}">${label}</button>`;
+      el.innerHTML =
+        pill("", `All ${escapeHtml(categoryLabel(activeCategory))}`) +
+        pill("consoles", `Consoles (${nConsoles})`) +
+        pill("games", `Games (${nGames})`);
+      el.hidden = false;
+
+      hint.hidden = true;
+      const brand = activeBrand && activeBrand !== "__none__" ? ALL_BRANDS.find((b) => b.slug === activeBrand) : null;
+      if (brand && activeKind === "consoles") {
+        const n = inCat.filter((i) => i.brand === brand.slug && i.item_type !== "consoles").length;
+        if (n) {
+          hint.innerHTML = `Thinking about the ${escapeHtml(brand.label)}? <button type="button" class="btn-link" data-kind-jump="games">See its ${n} game${n === 1 ? "" : "s"} &rarr;</button>`;
+          hint.hidden = false;
+        }
+      } else if (brand && activeKind === "games") {
+        const n = inCat.filter((i) => i.brand === brand.slug && i.item_type === "consoles").length;
+        if (n) {
+          hint.innerHTML = `Need the console? <button type="button" class="btn-link" data-kind-jump="consoles">See the ${escapeHtml(brand.label)} console${n === 1 ? "" : "s"} &rarr;</button>`;
+          hint.hidden = false;
+        }
+      }
+    }
+
+    document.getElementById("kindSwitch").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-kind]");
+      if (!btn) return;
+      activeKind = btn.dataset.kind || null;
+      activeBrand = null;
+      activeLetter = null;
+      renderGrid();
+    });
+    document.getElementById("kindHint").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-kind-jump]");
+      if (!btn) return;
+      activeKind = btn.dataset.kindJump;   // keeps the same platform selected
+      activeLetter = null;
+      renderGrid();
+    });
+
     function renderSubcatPicker() {
       const pickerEl = document.getElementById("subcatPicker");
       const toggleEl = document.getElementById("subcatToggle");
       const bodyEl = document.getElementById("subcatBody");
-      const brands = currentCategoryBrands();
+      let brands = currentCategoryBrands();
+      // With Consoles or Games chosen, only list the platforms that have that kind of item.
+      if (activeKind) brands = brands.filter((b) => allItems.some((i) => i.category === activeCategory && i.brand === b.slug && kindMatches(i)));
       const usesDropdown = categoryUsesDropdown(activeCategory) && brands.length > 0;
       pickerEl.hidden = !usesDropdown;
       if (!usesDropdown) return;
@@ -638,14 +712,15 @@
         ? activeBrand === "__none__"
           ? "Other / Uncategorized"
           : brands.find((b) => b.slug === activeBrand)?.label || "Filter by subcategory"
-        : `All ${categoryLabel(activeCategory)}`;
+        : activeKind === "consoles" ? "All Consoles" : activeKind === "games" ? "All Games" : `All ${categoryLabel(activeCategory)}`;
       toggleEl.textContent = `${currentLabel} ▾`;
 
-      const totalCount = allItems.filter((i) => i.category === activeCategory).length;
-      const otherCount = allItems.filter((i) => i.category === activeCategory && !i.brand).length;
-      const allBtn = `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="">All ${escapeHtml(categoryLabel(activeCategory))} <span class="subcat-picker-count">(${totalCount})</span></button>`;
+      const totalCount = allItems.filter((i) => i.category === activeCategory && kindMatches(i)).length;
+      const otherCount = allItems.filter((i) => i.category === activeCategory && !i.brand && kindMatches(i)).length;
+      const allLabel = activeKind === "consoles" ? "All Consoles" : activeKind === "games" ? "All Games" : `All ${categoryLabel(activeCategory)}`;
+      const allBtn = `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="">${escapeHtml(allLabel)} <span class="subcat-picker-count">(${totalCount})</span></button>`;
       const otherBtn = `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="__none__">Other / Uncategorized <span class="subcat-picker-count">(${otherCount})</span></button>`;
-      bodyEl.innerHTML = allBtn + buildBrandPickerSectionHtml(brands, null, activeCategory) + otherBtn;
+      bodyEl.innerHTML = allBtn + buildBrandPickerSectionHtml(brands, null, activeCategory) + (otherCount || !activeKind ? otherBtn : "");
     }
 
     wireSubcatPicker({
@@ -781,6 +856,7 @@
       document.getElementById("newArrivalsSection").hidden = true;
       renderSubcatPicker();
       renderGlobalSubcatPicker();
+      renderKindSwitch();
 
       if (showingTree) {
         renderCategoryTree();
@@ -872,6 +948,7 @@
       const scopedItems = allItems.filter((item) => {
         if (isRareView) return Number(item.asking_price) >= RARE_THRESHOLD;
         if (activeCategory !== "all" && item.category !== activeCategory) return false;
+        if (activeKind && activeCategory !== "all" && !kindMatches(item)) return false;
         if (leafSelected) {
           const itemTypesKnown = new Set(itemTypesForCategory(activeCategory).map((t) => t.slug));
           const matchesType =
