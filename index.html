@@ -1318,9 +1318,12 @@
     // own Add to Cart. His own pricing-strategy reasoning never appears here —
     // only the public condition fields, and internal_notes isn't even fetched
     // by the public site (see loadItems()).
+    let lightboxGroupVariants = [];
     function openGroupDetails(variants) {
       const first = variants[0];
-      lightboxPhotos = first.photo_urls || [];
+      lightboxGroupVariants = variants;
+      const firstWithPhotos = variants.find((v) => v.photo_urls && v.photo_urls.length) || first;
+      lightboxPhotos = firstWithPhotos.photo_urls || [];
       lightboxIndex = 0;
       lightboxAlt = first.title;
       lightboxItemId = null;
@@ -1356,8 +1359,14 @@
             v.status === "available"
               ? `<button type="button" class="btn secondary" data-add-cart="${v.id}">Add to Cart</button>`
               : `<span class="status ${v.status}">${v.status.toUpperCase()}</span>`;
+          // Each copy's own photo, so a variant that looks different (bonus disc sticker, a different
+          // edition, a damaged case) can be seen before adding it to the cart. Click to view its photos.
+          const thumbHtml = v.photo_urls && v.photo_urls.length
+            ? `<button type="button" class="lb-variant-thumb" data-variant-photo="${v.id}" aria-label="Show photos of this copy"><img src="${escapeHtml(v.photo_urls[0])}" alt="" loading="lazy" /><span>View photos</span></button>`
+            : "";
           return `
             <div class="lb-variant-row">
+              ${thumbHtml}
               <span class="tag-condition">${escapeHtml(conditionText)}</span>
               ${notesHtml}
               ${priceHtml(v)}
@@ -1370,6 +1379,16 @@
       document.getElementById("lightboxDetails").hidden = false;
       document.getElementById("lightbox").hidden = false;
     }
+
+    document.getElementById("lbVariants").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-variant-photo]");
+      if (!btn) return;
+      const v = lightboxGroupVariants.find((x) => String(x.id) === btn.dataset.variantPhoto);
+      if (!v || !v.photo_urls || !v.photo_urls.length) return;
+      lightboxPhotos = v.photo_urls;
+      lightboxIndex = 0;
+      renderLightboxImage();
+    });
 
     function closeLightbox() {
       document.getElementById("lightbox").hidden = true;

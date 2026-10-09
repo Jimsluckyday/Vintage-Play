@@ -872,6 +872,31 @@ summary.subcat-picker-section-label:hover {
   gap: 0.4rem;
 }
 
+.lb-variant-thumb {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.lb-variant-thumb img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+}
+
+.lb-variant-thumb span {
+  text-decoration: underline;
+}
+
 .lb-variant-row .lb-condition-notes {
   margin: 0;
   width: 100%;
