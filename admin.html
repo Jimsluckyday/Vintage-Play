@@ -177,7 +177,7 @@
       </select>
 
       <div id="toteField" hidden>
-        <label for="tote">Tote (where it's stored, e.g. "Tote 1" -- leave blank for loose items)</label>
+        <label for="tote">Tote (where it's stored, e.g. "Tote 1" -- leave blank for loose items. Copies in different totes: "Tote 1 x1, Tote 2 x2")</label>
         <input type="text" id="tote" list="toteOptions" placeholder="Tote 1" />
         <datalist id="toteOptions"></datalist>
       </div>
@@ -1217,6 +1217,16 @@
       return item.status !== "sold" && !item.on_hold_at && !hasPhoto(item);
     }
 
+    // One listing can hold copies in more than one tote, written as "Tote 1 x1, Tote 2 x2"
+    // (the counts are optional: "Tote 1, Tote 2" also works). This returns just the tote names,
+    // so the filter finds the listing under each tote it is in.
+    function toteNames(value) {
+      return String(value || "")
+        .split(",")
+        .map((part) => part.replace(/\s*(?:[x×:]\s*\d+|\(\s*\d+\s*\))\s*$/i, "").trim())
+        .filter(Boolean);
+    }
+
     function refreshToteControls() {
       toteColumnExists = items.length > 0 && Object.prototype.hasOwnProperty.call(items[0], "tote");
       document.getElementById("toteField").hidden = !toteColumnExists;
@@ -1224,7 +1234,7 @@
       filter.hidden = !toteColumnExists;
       if (!toteColumnExists) return;
       const previous = filter.value || "all";
-      const totes = [...new Set(items.map((i) => (i.tote || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      const totes = [...new Set(items.flatMap((i) => toteNames(i.tote)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
       filter.innerHTML =
         `<option value="all">All totes</option>` +
         totes.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("") +
@@ -1506,7 +1516,7 @@
         const matchesType = itemMatchesType(item, typeFilter);
         const matchesPhoto = !photoOnly || (item.photo_urls && item.photo_urls.length > 0);
         const matchesMissing = !missingPhotoOnly || needsPhoto(item);
-        const matchesTote = toteFilter === "all" || (toteFilter === "__none__" ? !(item.tote || "").trim() : (item.tote || "").trim() === toteFilter);
+        const matchesTote = toteFilter === "all" || (toteFilter === "__none__" ? !(item.tote || "").trim() : toteNames(item.tote).includes(toteFilter));
         const matchesPromo = !promoFilterOnly || item.featured_at || item.promo_at;
         const matchesHold = !holdFilterOnly || item.on_hold_at;
         return matchesSearch && matchesCategory && matchesBrand && matchesType && matchesPhoto && matchesMissing && matchesTote && matchesPromo && matchesHold;
