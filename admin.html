@@ -373,6 +373,7 @@
               `<optgroup label="${escapeHtml(g)}">` +
               grouped
                 .filter((b) => b.group_label === g)
+                .sort(brandCompare)
                 .map((b) => `<option value="${b.slug}">${escapeHtml(b.label)}</option>`)
                 .join("") +
               `</optgroup>`
@@ -1254,6 +1255,15 @@
       return { cat: cat || "all", type: type || "all" };
     }
 
+    // Subcategory (brand) order used by the drop-down and the By Subcategory table: grouped by maker
+    // (Atari, Microsoft, Nintendo, Sega, Sony; ungrouped ones last), then by name with numbers in
+    // order, so PlayStation 1, 2, 3, 4 sit together in sequence.
+    function brandCompare(a, b) {
+      const ga = a.group_label || "￿";
+      const gb = b.group_label || "￿";
+      return ga.localeCompare(gb) || String(a.label).localeCompare(String(b.label), undefined, { numeric: true });
+    }
+
     function populateInventoryCategoryFilter() {
       const select = document.getElementById("inventoryCategoryFilter");
       const previousValue = select.value;
@@ -1291,7 +1301,7 @@
       if (typeFilter !== "all") {
         brands = brands.filter((b) => items.some((i) => i.category === categoryFilter && i.brand === b.slug && itemMatchesType(i, typeFilter)));
       }
-      const sorted = [...brands].sort((a, b) => a.label.localeCompare(b.label));
+      const sorted = [...brands].sort((a, b) => (categoryFilter === "all" ? a.category.localeCompare(b.category) : 0) || brandCompare(a, b));
       const optionLabel = (b) => (categoryFilter === "all" ? `${b.label} (${categoryLabel(b.category)})` : b.label);
       select.innerHTML =
         `<option value="all">All Subcategories</option>` +
@@ -1415,17 +1425,20 @@
         brandedValue += valueOf(i);
         brandedCost += costOf(i);
       });
-      // Each platform's rows stay together (Games, then Consoles, then Accessories); platforms are ordered by total value.
-      const platformValue = {};
-      Object.values(byBrand).forEach((v) => {
-        platformValue[v.platform] = (platformValue[v.platform] || 0) + v.value;
+      // Each platform's rows stay together (Games, then Consoles, then Accessories). Platforms are ordered by
+      // category, then by maker (Atari, Microsoft, Nintendo, Sega, Sony...), then by name with numbers in order
+      // (PlayStation 1, 2, 3, 4, then Portable) -- the same order as the Subcategory drop-down.
+      const catIndex = (slug) => {
+        const n = ALL_CATEGORIES.findIndex((c) => c.slug === slug);
+        return n === -1 ? 99 : n;
+      };
+      const brandRows = Object.entries(byBrand).sort((a, b) => {
+        const [catA, slugA] = a[1].platform.split("|");
+        const [catB, slugB] = b[1].platform.split("|");
+        const metaA = ALL_BRANDS.find((x) => x.slug === slugA && x.category === catA) || { label: slugA };
+        const metaB = ALL_BRANDS.find((x) => x.slug === slugB && x.category === catB) || { label: slugB };
+        return catIndex(catA) - catIndex(catB) || brandCompare(metaA, metaB) || (KIND_ORDER[a[1].kind] ?? 9) - (KIND_ORDER[b[1].kind] ?? 9);
       });
-      const brandRows = Object.entries(byBrand).sort(
-        (a, b) =>
-          platformValue[b[1].platform] - platformValue[a[1].platform] ||
-          a[1].platform.localeCompare(b[1].platform) ||
-          (KIND_ORDER[a[1].kind] ?? 9) - (KIND_ORDER[b[1].kind] ?? 9)
-      );
       const kindRows = ["Games", "Consoles", "Accessories"]
         .filter((k) => byKind[k])
         .map(
