@@ -1185,6 +1185,9 @@
           .from("items")
           .select("*")
           .order("created_at", { ascending: false })
+          // Bulk uploads give hundreds of rows the exact same created_at. Without a unique tie-breaker the
+          // pages overlap (some rows load twice, others never), which made the summary totals drift.
+          .order("id", { ascending: true })
           .range(offset, offset + pageSize - 1);
 
         if (error) {
@@ -1195,7 +1198,9 @@
         if (data.length < pageSize) break;
         offset += pageSize;
       }
-      items = allData;
+      // Belt and braces: never count the same listing twice.
+      const seenIds = new Set();
+      items = allData.filter((i) => (seenIds.has(i.id) ? false : (seenIds.add(i.id), true)));
       renderItemList();
     }
 

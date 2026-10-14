@@ -1834,6 +1834,9 @@
           // internal_notes, this is admin-only and should never reach here.
           .is("on_hold_at", null)
           .order("title", { ascending: true })
+          // Many listings share a title (several copies/conditions), so add a unique tie-breaker or the
+          // pages can overlap and some listings would load twice while others never load.
+          .order("id", { ascending: true })
           .range(offset, offset + pageSize - 1);
 
         if (error) {
@@ -1844,7 +1847,8 @@
         if (data.length < pageSize) break;
         offset += pageSize;
       }
-      allItems = allData;
+      const seenIds = new Set();
+      allItems = allData.filter((i) => (seenIds.has(i.id) ? false : (seenIds.add(i.id), true)));
       renderFilters();
       renderGrid();
     }
