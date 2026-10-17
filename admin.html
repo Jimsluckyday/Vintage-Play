@@ -288,6 +288,12 @@
         <button type="button" class="btn secondary" id="inventoryPromoFilterBtn">Show Sale/Featured Only</button>
         <button type="button" class="btn secondary" id="inventoryHoldFilterBtn">Show On Hold Only</button>
         <button type="button" class="btn secondary" id="inventoryMissingPhotoBtn">Show Missing Photos</button>
+        <select id="inventoryPendingFilter" style="max-width:300px;" title="Bulk media (CDs, DVDs, VHS) uploaded on hold until the exact edition and price are checked from a photo">
+          <option value="all">Pending price check: all items</option>
+          <option value="photo">Pending check - photographed (ready for me to check)</option>
+          <option value="nophoto">Pending check - no photo yet</option>
+          <option value="any">Pending check - all</option>
+        </select>
       </div>
       <div class="btn-row" id="inventoryLetterBar" style="margin-top:0.5rem;"></div>
       <p class="hint" id="inventoryFilterNote"></p>
@@ -777,6 +783,7 @@
       resetInventoryPaging();
     });
     document.getElementById("inventoryToteFilter").addEventListener("change", resetInventoryPaging);
+    document.getElementById("inventoryPendingFilter").addEventListener("change", resetInventoryPaging);
     document.getElementById("inventoryLoadMoreBtn").addEventListener("click", () => {
       inventoryPagesShown++;
       renderItemList();
@@ -1219,6 +1226,13 @@
       return !!(item.photo_urls && item.photo_urls.length);
     }
 
+    // Bulk media (music CDs, DVD/VHS batches) is uploaded ON HOLD with PENDING-CHECK in the private notes until the
+    // exact edition and price are checked from a photo. These items are never released by a button: they stay hidden
+    // until the price has been confirmed and the hold is released on purpose.
+    function isPendingCheck(item) {
+      return !!item.on_hold_at && (item.internal_notes || "").includes("PENDING-CHECK");
+    }
+
     function needsPhoto(item) {
       return item.status !== "sold" && !item.on_hold_at && !hasPhoto(item);
     }
@@ -1527,6 +1541,15 @@
       missingBtn.textContent = missingPhotoOnly ? `Showing ${missingCount} Missing Photos (click to show all)` : `Show Missing Photos (${missingCount})`;
       missingBtn.classList.toggle("active", missingPhotoOnly);
 
+      const pendingAll = items.filter(isPendingCheck);
+      const pendingPhoto = pendingAll.filter(hasPhoto).length;
+      const pendingSel = document.getElementById("inventoryPendingFilter");
+      pendingSel.options[0].textContent = "Pending price check: all items";
+      pendingSel.options[1].textContent = `Pending check - photographed, ready for me to check (${pendingPhoto})`;
+      pendingSel.options[2].textContent = `Pending check - no photo yet (${pendingAll.length - pendingPhoto})`;
+      pendingSel.options[3].textContent = `Pending check - all (${pendingAll.length})`;
+      const pendingFilter = pendingSel.value;
+
       const preLetter = items.filter((item) => {
         const matchesSearch = !searchTerm || item.title.toLowerCase().includes(searchTerm);
         const matchesCategory = categoryFilter === "all" || item.category === categoryFilter;
@@ -1537,7 +1560,12 @@
         const matchesTote = toteFilter === "all" || (toteFilter === "__none__" ? !(item.tote || "").trim() : toteNames(item.tote).includes(toteFilter));
         const matchesPromo = !promoFilterOnly || item.featured_at || item.promo_at;
         const matchesHold = !holdFilterOnly || item.on_hold_at;
-        return matchesSearch && matchesCategory && matchesBrand && matchesType && matchesPhoto && matchesMissing && matchesTote && matchesPromo && matchesHold;
+        const matchesPending =
+          pendingFilter === "all" ||
+          (pendingFilter === "any" && isPendingCheck(item)) ||
+          (pendingFilter === "photo" && isPendingCheck(item) && hasPhoto(item)) ||
+          (pendingFilter === "nophoto" && isPendingCheck(item) && !hasPhoto(item));
+        return matchesPending && matchesSearch && matchesCategory && matchesBrand && matchesType && matchesPhoto && matchesMissing && matchesTote && matchesPromo && matchesHold;
       });
 
       renderInventoryLetterBar(preLetter);
@@ -1576,7 +1604,7 @@
         const badges = [
           item.featured_at ? `<span class="badge badge-new">NEW</span>` : "",
           item.promo_at ? `<span class="badge badge-sale">SALE</span>` : "",
-          item.on_hold_at ? `<span class="badge badge-hold">ON HOLD</span>` : "",
+          isPendingCheck(item) ? `<span class="badge badge-hold">PENDING PRICE CHECK</span>` : item.on_hold_at ? `<span class="badge badge-hold">ON HOLD</span>` : "",
         ].join(" ");
         const conditionTag = [item.condition_grade, item.completeness].filter(Boolean).join(", ");
         const costLabel =
@@ -1669,7 +1697,12 @@
       const item = items.find((i) => i.id === id);
       if (!item) return;
       const newValue = item[column] ? null : new Date().toISOString();
-      const { error } = await supabaseClient.from("items").update({ [column]: newValue }).eq("id", id);
+      const update = { [column]: newValue };
+      // Releasing a pending-check hold by hand also clears the tag, so a later repair hold isn't mistaken for one.
+      if (column === "on_hold_at" && newValue === null && (item.internal_notes || "").includes("PENDING-CHECK")) {
+        update.internal_notes = item.internal_notes.replace("PENDING-CHECK", "").trim() || null;
+      }
+      const { error } = await supabaseClient.from("items").update(update).eq("id", id);
       if (error) {
         alert(`Couldn't update: ${error.message}`);
         return;
