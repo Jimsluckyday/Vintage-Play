@@ -226,13 +226,13 @@
         <option value="sold">Sold</option>
       </select>
 
-      <div class="field-label">Current Photos</div>
+      <div class="field-label">Photos (in the order they will show)</div>
       <div class="btn-row" id="photoManager"></div>
       <p class="hint" id="existingPhotosNote"></p>
 
       <label for="photos">Add Photos</label>
       <input type="file" id="photos" accept="image/*" multiple />
-      <div class="btn-row" id="newPhotoPreview" style="margin-top:0.5rem;"></div>
+      <p class="hint">Pick as many as you like, more than once if you want. New photos appear above (marked NEW) and are only uploaded when you press Save Item, so you can put them in order first: drag a photo, or use the arrows. Photos picked together are lined up by file name (1, 2, 3 ...).</p>
 
       <div class="btn-row">
         <button class="btn" id="saveBtn">Save Item</button>
@@ -313,7 +313,9 @@
     let items = [];
     let sales = [];
     let editingId = null;
-    let editingPhotoUrls = [];
+    // One ordered list for the photos of the item being edited. Each entry is either an already-saved photo { url }
+    // or a photo picked but not uploaded yet { file, preview }. The order here is the order saved to the listing.
+    let editingPhotos = [];
 
     const loginView = document.getElementById("loginView");
     const adminView = document.getElementById("adminView");
@@ -1756,14 +1758,18 @@
     function renderPhotoManager() {
       const managerEl = document.getElementById("photoManager");
       managerEl.innerHTML = "";
-      editingPhotoUrls.forEach((url, index) => {
+      editingPhotos.forEach((entry, index) => {
         const isFirst = index === 0;
-        const isLast = index === editingPhotoUrls.length - 1;
+        const isLast = index === editingPhotos.length - 1;
         const wrap = document.createElement("div");
         wrap.style.position = "relative";
+        wrap.draggable = true;
+        wrap.style.cursor = "grab";
         wrap.innerHTML = `
-          <img src="${url}" alt="" style="width:70px;height:70px;object-fit:cover;border-radius:6px;display:block;" />
-          ${isFirst ? `<span style="position:absolute;bottom:2px;left:2px;background:var(--mustard);color:var(--ink);font-size:0.6rem;font-weight:800;padding:0.05rem 0.3rem;border-radius:4px;">COVER</span>` : ""}
+          <img src="${entry.url || entry.preview}" alt="" draggable="false" style="width:70px;height:70px;object-fit:cover;border-radius:6px;display:block;${entry.file ? "border:2px solid var(--ink);box-sizing:border-box;" : ""}" />
+          ${isFirst ? `<span style="position:absolute;bottom:24px;left:2px;background:var(--mustard);color:var(--ink);font-size:0.6rem;font-weight:800;padding:0.05rem 0.3rem;border-radius:4px;">COVER</span>` : ""}
+          ${entry.file ? `<span style="position:absolute;top:2px;left:2px;background:#2f7d78;color:#fff;font-size:0.6rem;font-weight:800;padding:0.05rem 0.3rem;border-radius:4px;">NEW</span>` : ""}
+          <span style="position:absolute;bottom:24px;right:2px;background:rgba(0,0,0,0.6);color:#fff;font-size:0.65rem;font-weight:700;padding:0 0.3rem;border-radius:4px;">${index + 1}</span>
           <button type="button" data-remove-index="${index}" title="Remove photo"
             style="position:absolute;top:-6px;right:-6px;background:#7a2e2e;color:#fff;border:none;border-radius:50%;width:20px;height:20px;line-height:1;cursor:pointer;">&times;</button>
           <div style="display:flex;justify-content:center;gap:0.2rem;margin-top:0.2rem;">
@@ -1773,11 +1779,28 @@
               style="padding:0.05rem 0.4rem;font-size:0.7rem;cursor:pointer;">&rarr;</button>
           </div>
         `;
+        wrap.addEventListener("dragstart", (e) => {
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", String(index));
+        });
+        wrap.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+        });
+        wrap.addEventListener("drop", (e) => {
+          e.preventDefault();
+          const from = Number(e.dataTransfer.getData("text/plain"));
+          if (Number.isNaN(from) || from === index) return;
+          const [moved] = editingPhotos.splice(from, 1);
+          editingPhotos.splice(index, 0, moved);
+          renderPhotoManager();
+        });
         managerEl.appendChild(wrap);
       });
       managerEl.querySelectorAll("[data-remove-index]").forEach((btn) =>
         btn.addEventListener("click", () => {
-          editingPhotoUrls.splice(Number(btn.dataset.removeIndex), 1);
+          const [removed] = editingPhotos.splice(Number(btn.dataset.removeIndex), 1);
+          if (removed && removed.preview) URL.revokeObjectURL(removed.preview);
           renderPhotoManager();
         })
       );
@@ -1785,43 +1808,36 @@
         btn.addEventListener("click", () => {
           const index = Number(btn.dataset.moveIndex);
           const target = index + Number(btn.dataset.direction);
-          if (target < 0 || target >= editingPhotoUrls.length) return;
-          [editingPhotoUrls[index], editingPhotoUrls[target]] = [editingPhotoUrls[target], editingPhotoUrls[index]];
+          if (target < 0 || target >= editingPhotos.length) return;
+          [editingPhotos[index], editingPhotos[target]] = [editingPhotos[target], editingPhotos[index]];
           renderPhotoManager();
         })
       );
-      document.getElementById("existingPhotosNote").textContent = editingPhotoUrls.length
-        ? "The first photo (marked COVER) is what shows on the catalog card — use the arrows to reorder. Don't forget to hit Save Item after reordering."
+      const unsaved = editingPhotos.filter((e) => e.file).length;
+      document.getElementById("existingPhotosNote").textContent = editingPhotos.length
+        ? `The first photo (marked COVER) is what shows on the catalog card. Drag a photo, or use the arrows, to put them in order.` +
+          (unsaved ? ` ${unsaved} new photo${unsaved === 1 ? " is" : "s are"} not uploaded yet: press Save Item.` : " Remember to press Save Item after reordering.")
         : "No photos yet.";
     }
 
-    // Phone photo filenames are just numbers, so show a thumbnail of each
-    // file actually selected in the picker before it gets uploaded.
-    let newPhotoPreviewUrls = [];
-    function renderNewPhotoPreview() {
-      newPhotoPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
-      newPhotoPreviewUrls = [];
-      const previewEl = document.getElementById("newPhotoPreview");
-      previewEl.innerHTML = "";
-      const files = document.getElementById("photos").files;
-      Array.from(files).forEach((file) => {
-        const url = URL.createObjectURL(file);
-        newPhotoPreviewUrls.push(url);
-        const img = document.createElement("img");
-        img.src = url;
-        img.alt = file.name;
-        img.title = file.name;
-        img.style.cssText = "width:70px;height:70px;object-fit:cover;border-radius:6px;border:2px solid var(--ink);display:block;";
-        previewEl.appendChild(img);
-      });
+    // Photos picked in the file box are staged in the list above (not uploaded yet) so they can be put in order first.
+    // Photos picked together are lined up by file name, with numbers in order (Photo 2 before Photo 10).
+    function addStagedPhotos(fileList) {
+      const files = Array.from(fileList).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+      files.forEach((file) => editingPhotos.push({ file, preview: URL.createObjectURL(file) }));
+      renderPhotoManager();
     }
-    document.getElementById("photos").addEventListener("change", renderNewPhotoPreview);
+    document.getElementById("photos").addEventListener("change", (e) => {
+      addStagedPhotos(e.target.files);
+      e.target.value = "";
+    });
 
     function startEdit(id) {
       const item = items.find((i) => i.id === id);
       if (!item) return;
       editingId = id;
-      editingPhotoUrls = [...(item.photo_urls || [])];
+      editingPhotos.forEach((e) => e.preview && URL.revokeObjectURL(e.preview));
+      editingPhotos = (item.photo_urls || []).map((url) => ({ url }));
       document.getElementById("formTitle").textContent = `Edit: ${item.title}`;
       document.getElementById("title").value = item.title || "";
       document.getElementById("category").value = item.category || "games";
@@ -1844,14 +1860,14 @@
       document.getElementById("status").value = item.status || "available";
       document.getElementById("photos").value = "";
       renderPhotoManager();
-      renderNewPhotoPreview();
       document.getElementById("cancelEditBtn").hidden = false;
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
     function resetForm() {
       editingId = null;
-      editingPhotoUrls = [];
+      editingPhotos.forEach((e) => e.preview && URL.revokeObjectURL(e.preview));
+      editingPhotos = [];
       document.getElementById("formTitle").textContent = "Add New Item";
       document.getElementById("title").value = "";
       document.getElementById("category").value = "games";
@@ -1874,7 +1890,6 @@
       document.getElementById("status").value = "available";
       document.getElementById("photos").value = "";
       renderPhotoManager();
-      renderNewPhotoPreview();
       document.getElementById("cancelEditBtn").hidden = true;
     }
 
@@ -2171,13 +2186,19 @@
         }
       }
 
-      const fileInput = document.getElementById("photos");
       try {
-        if (fileInput.files.length > 0) {
-          const newUrls = await uploadPhotos(fileInput.files);
-          editingPhotoUrls.push(...newUrls);
+        // Upload the photos that were picked but not saved yet, one after another in the order shown, then keep that order.
+        const pending = editingPhotos.filter((e) => e.file);
+        if (pending.length > 0) {
+          const newUrls = await uploadPhotos(pending.map((e) => e.file));
+          pending.forEach((e, i) => {
+            URL.revokeObjectURL(e.preview);
+            e.url = newUrls[i];
+            delete e.file;
+            delete e.preview;
+          });
         }
-        payload.photo_urls = editingPhotoUrls;
+        payload.photo_urls = editingPhotos.map((e) => e.url);
 
         if (editingId) {
           const { error } = await supabaseClient.from("items").update(payload).eq("id", editingId);
