@@ -1134,6 +1134,8 @@ button {
 .badge-highlight { background: var(--mustard); color: var(--ink); border: 2px solid var(--ink); }
 .badge-rare { background: var(--rare-purple); color: #fff; }
 .badge-hold { background: var(--ink-soft); color: #fff; }
+/* Held because of a disc problem (repair or donate): solid red so it stands out from pricing/photo holds. */
+.badge-hold.badge-disc { background: #b00020; color: #fff; border: 2px solid #5c0010; }
 
 .qty-note {
   font-size: 0.75rem;

@@ -1620,7 +1620,7 @@
         const badges = [
           item.featured_at ? `<span class="badge badge-new">NEW</span>` : "",
           item.promo_at ? `<span class="badge badge-sale">SALE</span>` : "",
-          item.on_hold_at ? `<span class="badge badge-hold">${holdReason(item).badge}</span>` : "",
+          item.on_hold_at ? `<span class="badge badge-hold${holdReason(item).badge === "DISC ISSUE - ON HOLD" ? " badge-disc" : ""}">${holdReason(item).badge}</span>` : "",
         ].join(" ");
         const conditionTag = [item.condition_grade, item.completeness].filter(Boolean).join(", ");
         const costLabel =
