@@ -293,6 +293,7 @@
           <option value="photo">Pending check - photographed (ready for me to check)</option>
           <option value="nophoto">Pending check - no photo yet</option>
           <option value="any">Pending check - all</option>
+          <option value="disc">Held for a disc issue (repair or donate)</option>
         </select>
       </div>
       <div class="btn-row" id="inventoryLetterBar" style="margin-top:0.5rem;"></div>
@@ -1235,6 +1236,17 @@
       return !!item.on_hold_at && (item.internal_notes || "").includes("PENDING-CHECK");
     }
 
+    // Why an item is on hold, read from the private notes, so the list says it instead of one generic badge.
+    // A disc-issue hold (owner's '**Condition issue on disc**' marker) must never look like a plain waiting-for-photos hold.
+    function holdReason(item) {
+      if (!item.on_hold_at) return null;
+      const notes = item.internal_notes || "";
+      if (notes.includes("Condition issue on disc")) return { badge: "DISC ISSUE - ON HOLD", text: "Held: condition issue on the disc (repair it if the album is worth it, otherwise donate)." };
+      if (isPendingCheck(item) && notes.includes("UNPRICED PLACEHOLDER")) return { badge: "NOT PRICED YET", text: "Held: not priced yet. The $1.99 is a placeholder; it needs a photo and a sold check before release." };
+      if (isPendingCheck(item)) return { badge: "PENDING PRICE CHECK", text: "Held: price and edition are waiting to be validated from the photos." };
+      return { badge: "ON HOLD", text: "Held: needs repair or testing (use Release Hold when it is ready)." };
+    }
+
     function needsPhoto(item) {
       return item.status !== "sold" && !item.on_hold_at && !hasPhoto(item);
     }
@@ -1550,6 +1562,7 @@
       pendingSel.options[1].textContent = `Pending check - photographed, ready for me to check (${pendingPhoto})`;
       pendingSel.options[2].textContent = `Pending check - no photo yet (${pendingAll.length - pendingPhoto})`;
       pendingSel.options[3].textContent = `Pending check - all (${pendingAll.length})`;
+      pendingSel.options[4].textContent = `Held for a disc issue - repair or donate (${items.filter((i) => holdReason(i) && holdReason(i).badge === "DISC ISSUE - ON HOLD").length})`;
       const pendingFilter = pendingSel.value;
 
       const preLetter = items.filter((item) => {
@@ -1566,7 +1579,8 @@
           pendingFilter === "all" ||
           (pendingFilter === "any" && isPendingCheck(item)) ||
           (pendingFilter === "photo" && isPendingCheck(item) && hasPhoto(item)) ||
-          (pendingFilter === "nophoto" && isPendingCheck(item) && !hasPhoto(item));
+          (pendingFilter === "nophoto" && isPendingCheck(item) && !hasPhoto(item)) ||
+          (pendingFilter === "disc" && holdReason(item) && holdReason(item).badge === "DISC ISSUE - ON HOLD");
         return matchesPending && matchesSearch && matchesCategory && matchesBrand && matchesType && matchesPhoto && matchesMissing && matchesTote && matchesPromo && matchesHold;
       });
 
@@ -1606,7 +1620,7 @@
         const badges = [
           item.featured_at ? `<span class="badge badge-new">NEW</span>` : "",
           item.promo_at ? `<span class="badge badge-sale">SALE</span>` : "",
-          isPendingCheck(item) ? `<span class="badge badge-hold">PENDING PRICE CHECK</span>` : item.on_hold_at ? `<span class="badge badge-hold">ON HOLD</span>` : "",
+          item.on_hold_at ? `<span class="badge badge-hold">${holdReason(item).badge}</span>` : "",
         ].join(" ");
         const conditionTag = [item.condition_grade, item.completeness].filter(Boolean).join(", ");
         const costLabel =
@@ -1618,6 +1632,7 @@
           <div class="info">
             <h4>${escapeHtml(item.title)} <span class="meta">(${categoryLabel(item.category)}${itemTypeLabel(item) ? ` &rsaquo; <strong>${escapeHtml(itemTypeLabel(item))}</strong>` : ""}${subcatLabelHtml(item)})</span> ${badges}</h4>
             <div class="meta" style="font-weight:600;color:#333;">${conditionTag ? escapeHtml(conditionTag) : "No condition set"}${item.variant_group ? ` &middot; group: ${escapeHtml(item.variant_group)}` : ""}${item.condition_notes ? ` &mdash; ${escapeHtml(item.condition_notes)}` : ""}</div>
+            ${item.on_hold_at ? `<div class="meta" style="font-weight:600;color:#a33;">${escapeHtml(holdReason(item).text)}</div>` : ""}
             <div class="meta">${money(Number(item.asking_price))} &middot; ${costLabel}${item.tote ? ` &middot; <strong>${escapeHtml(item.tote)}</strong>` : ""} &middot; Qty ${item.quantity} &middot; ${item.status}${item.price_checked_at ? ` &middot; Price checked ${new Date(item.price_checked_at).toLocaleDateString()}` : ""}</div>
             <div class="btn-row">
               <button class="btn secondary" data-action="edit" data-id="${item.id}">Edit</button>
