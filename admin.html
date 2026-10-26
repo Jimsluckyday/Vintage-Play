@@ -1238,13 +1238,27 @@
 
     // Why an item is on hold, read from the private notes, so the list says it instead of one generic badge.
     // A disc-issue hold (owner's '**Condition issue on disc**' marker) must never look like a plain waiting-for-photos hold.
+    // The disc-issue marker lives in the private notes for the bulk-uploaded CDs/DVDs ("**Condition issue on disc**"), but the
+    // older games and movies carry it in the public condition notes ("Condition issues on disc -- held pending disc resurfacing."),
+    // so both fields are read. Same for the other older hold reasons (incomplete, untested).
     function holdReason(item) {
       if (!item.on_hold_at) return null;
       const notes = item.internal_notes || "";
-      if (notes.includes("Condition issue on disc")) return { badge: "DISC ISSUE - ON HOLD", text: "Held: condition issue on the disc (repair it if the album is worth it, otherwise donate)." };
+      const cond = item.condition_notes || "";
+      const both = `${notes} ${cond}`;
+      if (/Condition issues? on (the )?disc/i.test(both)) {
+        return {
+          badge: "DISC ISSUE - ON HOLD",
+          text: item.category === "music"
+            ? "Held: condition issue on the disc (repair it if the album is worth it, otherwise donate)."
+            : "Held: condition issue on the disc (resurface or repair it if it is worth it, otherwise donate).",
+        };
+      }
       if (isPendingCheck(item) && notes.includes("UNPRICED PLACEHOLDER")) return { badge: "NOT PRICED YET", text: "Held: not priced yet. The $1.99 is a placeholder; it needs a photo and a sold check before release." };
       if (isPendingCheck(item)) return { badge: "PENDING PRICE CHECK", text: "Held: price and edition are waiting to be validated from the photos." };
-      return { badge: "ON HOLD", text: "Held: needs repair or testing (use Release Hold when it is ready)." };
+      if (/missing disc|needs? (a )?(replacement )?manual|photocopy manual|missing (manual|case|booklet)/i.test(both)) return { badge: "INCOMPLETE - ON HOLD", text: `Held: incomplete. ${cond}`.trim() };
+      if (/untested|until tested|retest/i.test(both)) return { badge: "UNTESTED - ON HOLD", text: "Held: untested. Test it (with its controller and cables) before releasing the hold." };
+      return { badge: "ON HOLD", text: cond ? `Held: ${cond}` : "Held: needs repair or testing (use Release Hold when it is ready)." };
     }
 
     function needsPhoto(item) {
