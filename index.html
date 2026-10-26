@@ -1889,7 +1889,7 @@
       const { data, error } = await supabaseClient.rpc("check_promo_code", { p_code: code });
       const promo = !error && data && data[0];
       if (!promo) {
-        if (!quiet) setPromoStatus("That code isn't valid or has expired.");
+        if (!quiet) setPromoStatus("That code isn't valid, has expired, or has already been used.");
         return;
       }
       codePromo = promo;

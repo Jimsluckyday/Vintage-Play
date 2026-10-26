@@ -98,6 +98,29 @@
       </details>
     </div>
 
+    <div class="section" id="thanksSection">
+      <h2>Thank-You Coupons (<span id="thanksCount">0</span>)</h2>
+      <p class="hint">One flyer goes in each package. Every flyer gets its <strong>own code</strong> that works <strong>once</strong>, so you can see exactly how many come back. The flyer sheet prints <strong>6 to a letter page</strong> in colour: on the sheet page choose Print, then <em>Save as PDF</em>, and upload that PDF to Staples (ask them to cut it into 6).</p>
+      <div style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+        <div><label for="thanksQty">How many flyers</label><input type="number" id="thanksQty" min="1" max="60" value="6" style="max-width:6rem;" /></div>
+        <div><label for="thanksPercent">Percent off</label><input type="number" id="thanksPercent" min="1" max="90" value="10" style="max-width:6rem;" /></div>
+        <div><label for="thanksDays">Good for (days)</label><input type="number" id="thanksDays" min="7" max="365" value="90" style="max-width:6rem;" /></div>
+        <div><label for="thanksNote">Note (optional)</label><input type="text" id="thanksNote" placeholder="e.g. November CD orders" style="max-width:16rem;" /></div>
+        <button type="button" class="btn" id="thanksMakeBtn" style="margin-top:0;">Create coupons &amp; open flyer sheet</button>
+      </div>
+      <p class="error-text" id="thanksError" hidden></p>
+      <p class="hint" id="thanksSummary" style="font-weight:700;margin-top:0.75rem;"></p>
+      <div style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;margin-top:0.5rem;">
+        <select id="thanksFilter" style="max-width:14rem;">
+          <option value="all">Show all coupons</option>
+          <option value="open">Not used yet</option>
+          <option value="used">Used</option>
+        </select>
+        <button type="button" class="btn secondary" id="thanksReprintBtn" style="margin-top:0;">Reprint the unused ones</button>
+      </div>
+      <div id="thanksList" style="margin-top:0.5rem;"></div>
+    </div>
+
     <div class="section">
       <h2>Orders (<span id="orderCount">0</span>)</h2>
       <p class="hint">Requests buyers submit from the cart. You should also get an email for each one — this list is the backup record.</p>
@@ -835,6 +858,8 @@
     // ---- Sales & promo codes ----
     let promotions = [];
     let promoEditingId = null;
+    let thanksCoupons = [];
+    let couponOrders = [];
 
     function promoScopeSummary(promo) {
       const bits = [];
@@ -902,12 +927,17 @@
       const { data, error } = await supabaseClient.from("promotions").select("*").order("created_at", { ascending: false });
       if (error) {
         promotions = [];
+        thanksCoupons = [];
         errEl.textContent = `Couldn't load sales and codes: ${error.message}. If this is the first time, run promotions_setup.sql in the Supabase SQL Editor (and make sure your login email is on the admin list).`;
         errEl.hidden = false;
       } else {
-        promotions = data;
+        // The single-use thank-you coupons live in their own section so they don't bury the real sales and codes.
+        thanksCoupons = data.filter((p) => p.kind === "thank_you");
+        promotions = data.filter((p) => p.kind !== "thank_you");
       }
       renderPromoList();
+      await loadCouponOrders();
+      renderThanks();
     }
 
     function renderPromoList() {
@@ -1077,6 +1107,162 @@
       }
       resetPromoForm();
       document.getElementById("promoFormBox").open = false;
+      await loadPromos();
+    });
+
+    // ---- Thank-you coupons: one single-use code per flyer, tracked against the orders ----
+    function makeThanksCode() {
+      const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I so a printed code is easy to type
+      let out = "THX-";
+      crypto.getRandomValues(new Uint8Array(5)).forEach((b) => { out += alphabet[b % alphabet.length]; });
+      return out;
+    }
+
+    function localYmd(date) {
+      const d = new Date(date);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    }
+
+    function thanksFlyerUrl(codes, percent, untilDate) {
+      const params = new URLSearchParams({ codes: codes.join(","), pct: String(percent) });
+      if (untilDate) params.set("until", localYmd(untilDate));
+      return `thankyou-flyer.html?${params.toString()}`;
+    }
+
+    async function loadCouponOrders() {
+      const { data, error } = await supabaseClient
+        .from("orders")
+        .select("id, created_at, total, discount_total, promo_code, customer_name")
+        .not("promo_code", "is", null);
+      couponOrders = error ? [] : data;
+    }
+
+    function thanksStatus(p) {
+      const used = couponOrders.filter((o) => (o.promo_code || "").toLowerCase() === p.code.toLowerCase());
+      if (used.length) return { cls: "used", text: "USED", color: "#2f7d78", orders: used };
+      if (!p.active) return { cls: "off", text: "Turned off", color: "#8a8a8a", orders: [] };
+      if (p.ends_at && new Date(p.ends_at) < new Date()) return { cls: "expired", text: "Expired", color: "#8a8a8a", orders: [] };
+      return { cls: "open", text: "Not used yet", color: "#b8860b", orders: [] };
+    }
+
+    function renderThanks() {
+      document.getElementById("thanksCount").textContent = thanksCoupons.length;
+      const withStatus = thanksCoupons.map((p) => ({ p, st: thanksStatus(p) }));
+      const usedOnes = withStatus.filter((x) => x.st.cls === "used");
+      const orders = usedOnes.flatMap((x) => x.st.orders);
+      const money = (n) => `$${Number(n || 0).toFixed(2)}`;
+      document.getElementById("thanksSummary").textContent = thanksCoupons.length
+        ? `${thanksCoupons.length} made, ${usedOnes.length} used (${Math.round((usedOnes.length / thanksCoupons.length) * 100)}%). Orders that used a coupon: ${money(orders.reduce((s, o) => s + Number(o.total || 0), 0))}, discounts given: ${money(orders.reduce((s, o) => s + Number(o.discount_total || 0), 0))}.`
+        : "No thank-you coupons yet.";
+
+      const filter = document.getElementById("thanksFilter").value;
+      const shown = withStatus.filter((x) => filter === "all" || (filter === "used" ? x.st.cls === "used" : x.st.cls === "open"));
+      const listEl = document.getElementById("thanksList");
+      if (!shown.length) {
+        listEl.innerHTML = `<p class="hint">${thanksCoupons.length ? "Nothing in that view." : "Create some above and they show up here."}</p>`;
+        return;
+      }
+      listEl.innerHTML = shown
+        .map(({ p, st }) => {
+          const o = st.orders[0];
+          return `
+            <div class="item-row" data-thanks-row="${p.id}">
+              <div class="info">
+                <h4><span style="background:#eee;border-radius:4px;padding:0.1rem 0.4rem;font-family:monospace;">${escapeHtml(p.code)}</span>
+                  ${Number(p.percent)}% off &mdash; <strong style="color:${st.color};">${st.text}</strong></h4>
+                <div class="meta">Made ${new Date(p.created_at).toLocaleDateString()}${p.ends_at ? ` &middot; good until ${new Date(p.ends_at).toLocaleDateString()}` : ""}${o ? ` &middot; used ${new Date(o.created_at).toLocaleDateString()} by ${escapeHtml(o.customer_name || "a customer")}: order of $${Number(o.total || 0).toFixed(2)}, saved $${Number(o.discount_total || 0).toFixed(2)}` : ""}</div>
+                <input type="text" data-thanks-note="${p.id}" value="${escapeHtml(p.note || "")}" placeholder="Who it went to / eBay order # (optional)" style="max-width:24rem;margin-top:0.4rem;" />
+                <div class="btn-row" style="margin-top:0.5rem;">
+                  <button type="button" class="btn secondary" data-thanks-print="${p.id}" style="margin-top:0;">Print flyer</button>
+                  <button type="button" class="btn secondary" data-thanks-link="${p.id}" style="margin-top:0;">Copy link</button>
+                  <button type="button" class="btn danger" data-thanks-delete="${p.id}" style="margin-top:0;">Delete</button>
+                </div>
+              </div>
+            </div>`;
+        })
+        .join("");
+
+      const find = (id) => thanksCoupons.find((x) => x.id === id);
+      listEl.querySelectorAll("[data-thanks-note]").forEach((input) =>
+        input.addEventListener("change", async () => {
+          const p = find(input.dataset.thanksNote);
+          const { error } = await supabaseClient.from("promotions").update({ note: input.value.trim() || null }).eq("id", p.id);
+          if (error) return alert(`Couldn't save the note: ${error.message}`);
+          p.note = input.value.trim() || null;
+        })
+      );
+      listEl.querySelectorAll("[data-thanks-print]").forEach((btn) =>
+        btn.addEventListener("click", () => {
+          const p = find(btn.dataset.thanksPrint);
+          window.open(thanksFlyerUrl([p.code], Number(p.percent), p.ends_at), "_blank");
+        })
+      );
+      listEl.querySelectorAll("[data-thanks-link]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          const p = find(btn.dataset.thanksLink);
+          const url = `${SITE_URL}/?code=${encodeURIComponent(p.code)}`;
+          try {
+            await navigator.clipboard.writeText(url);
+            btn.textContent = "Copied!";
+          } catch (e) {
+            prompt("Copy this link:", url);
+          }
+        })
+      );
+      listEl.querySelectorAll("[data-thanks-delete]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          const p = find(btn.dataset.thanksDelete);
+          if (!confirm(`Delete coupon ${p.code}? A printed flyer with this code will stop working.`)) return;
+          const { error } = await supabaseClient.from("promotions").delete().eq("id", p.id);
+          if (error) return alert(`Couldn't delete: ${error.message}`);
+          await loadPromos();
+        })
+      );
+    }
+
+    document.getElementById("thanksFilter").addEventListener("change", renderThanks);
+
+    document.getElementById("thanksReprintBtn").addEventListener("click", () => {
+      const open = thanksCoupons.filter((p) => thanksStatus(p).cls === "open");
+      if (!open.length) return alert("There are no unused coupons to print.");
+      window.open(thanksFlyerUrl(open.map((p) => p.code), Number(open[0].percent), open[0].ends_at), "_blank");
+    });
+
+    document.getElementById("thanksMakeBtn").addEventListener("click", async () => {
+      const errEl = document.getElementById("thanksError");
+      errEl.hidden = true;
+      const fail = (msg) => {
+        errEl.textContent = msg;
+        errEl.hidden = false;
+      };
+      const qty = Math.round(Number(document.getElementById("thanksQty").value));
+      const percent = Number(document.getElementById("thanksPercent").value);
+      const days = Math.round(Number(document.getElementById("thanksDays").value));
+      const note = document.getElementById("thanksNote").value.trim();
+      if (!(qty >= 1 && qty <= 60)) return fail("Make between 1 and 60 flyers at a time.");
+      if (!(percent >= 1 && percent <= 90)) return fail("Percent off must be between 1 and 90.");
+      if (!(days >= 7 && days <= 365)) return fail("Good for must be between 7 and 365 days.");
+
+      // Open the flyer tab right now (inside the click) so the browser's pop-up blocker lets it through.
+      const flyerWindow = window.open("", "_blank");
+      const ends = new Date();
+      ends.setDate(ends.getDate() + days);
+      ends.setHours(23, 59, 59, 0);
+      const buildRows = () =>
+        Array.from({ length: qty }, () => {
+          const code = makeThanksCode();
+          return { name: `Thank-you coupon ${code}`, percent, code, kind: "thank_you", max_uses: 1, note: note || null, ends_at: ends.toISOString(), active: true };
+        });
+      let result = await supabaseClient.from("promotions").insert(buildRows()).select();
+      if (result.error && result.error.code === "23505") result = await supabaseClient.from("promotions").insert(buildRows()).select(); // a random code collided; try fresh ones
+      if (result.error) {
+        if (flyerWindow) flyerWindow.close();
+        const missing = /kind|max_uses|note|column/i.test(result.error.message);
+        return fail(missing ? "The coupon columns aren't set up yet. Run thank_you_coupons_setup.sql in the Supabase SQL Editor once, then try again." : `Couldn't create the coupons: ${result.error.message}`);
+      }
+      const url = thanksFlyerUrl(result.data.map((r) => r.code), percent, ends);
+      if (flyerWindow) flyerWindow.location.href = url;
+      else window.location.href = url;
       await loadPromos();
     });
 
