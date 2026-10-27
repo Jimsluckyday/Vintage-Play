@@ -329,9 +329,27 @@
     // and that top tier is exactly what should count as rare.
     const RARE_THRESHOLD = 49.99;
 
+    // Extra top-level splits inside a category besides Consoles and Games (e.g. Skylanders figures,
+    // Accessories): each one that actually has items gets its own pill next to Consoles / Games.
+    function extraKindTypes(slug) {
+      return itemTypesForCategory(slug).filter(
+        (t) => t.slug !== "consoles" && t.slug !== "games" && allItems.some((i) => i.category === slug && i.item_type === t.slug)
+      );
+    }
+
+    function kindAllLabel() {
+      if (activeKind === "consoles") return "All Consoles";
+      if (activeKind === "games") return "All Games";
+      const t = activeKind ? itemTypesForCategory(activeCategory).find((x) => x.slug === activeKind) : null;
+      return t ? `All ${t.label}` : `All ${categoryLabel(activeCategory)}`;
+    }
+
     function kindMatches(item) {
       if (activeKind === "consoles") return item.item_type === "consoles";
-      if (activeKind === "games") return item.item_type !== "consoles";
+      if (activeKind === "games") {
+        return item.item_type !== "consoles" && !extraKindTypes(item.category).some((t) => t.slug === item.item_type);
+      }
+      if (activeKind) return item.item_type === activeKind;
       return true;
     }
 
@@ -682,7 +700,8 @@
       const el = document.getElementById("kindSwitch");
       const hint = document.getElementById("kindHint");
       const makerEl = document.getElementById("makerSwitch");
-      const show = activeCategory !== "all" && activeCategory !== RARE_SLUG && categoryHasConsoles(activeCategory);
+      const extraKinds = activeCategory !== "all" && activeCategory !== RARE_SLUG ? extraKindTypes(activeCategory) : [];
+      const show = activeCategory !== "all" && activeCategory !== RARE_SLUG && (categoryHasConsoles(activeCategory) || extraKinds.length > 0);
       if (!show) {
         el.hidden = true;
         makerEl.hidden = true;
@@ -692,13 +711,15 @@
       }
       const inCat = allItems.filter((i) => i.category === activeCategory);
       const nConsoles = inCat.filter((i) => i.item_type === "consoles").length;
-      const nGames = inCat.length - nConsoles;
+      const extraCounts = extraKinds.map((t) => ({ t, n: inCat.filter((i) => i.item_type === t.slug).length }));
+      const nGames = inCat.length - nConsoles - extraCounts.reduce((s, x) => s + x.n, 0);
       const pill = (kind, label) =>
         `<button type="button" data-kind="${kind}" class="${(activeKind || "") === kind ? "active" : ""}">${label}</button>`;
       el.innerHTML =
         pill("", `All ${escapeHtml(categoryLabel(activeCategory))}`) +
         pill("consoles", `Consoles (${nConsoles})`) +
-        pill("games", `Games (${nGames})`);
+        pill("games", `Games (${nGames})`) +
+        extraCounts.map(({ t, n }) => pill(escapeHtml(t.slug), `${escapeHtml(t.label)} (${n})`)).join("");
       el.hidden = false;
 
       // Console makers (Nintendo, Sega, Sony, Microsoft, Atari), only inside the Consoles view.
@@ -778,12 +799,12 @@
         ? activeBrand === "__none__"
           ? "Other / Uncategorized"
           : brands.find((b) => b.slug === activeBrand)?.label || "Filter by subcategory"
-        : activeKind === "consoles" ? "All Consoles" : activeKind === "games" ? "All Games" : `All ${categoryLabel(activeCategory)}`;
+        : kindAllLabel();
       toggleEl.textContent = `${currentLabel} ▾`;
 
       const totalCount = allItems.filter((i) => i.category === activeCategory && kindMatches(i) && makerMatches(i)).length;
       const otherCount = allItems.filter((i) => i.category === activeCategory && !i.brand && kindMatches(i) && makerMatches(i)).length;
-      const allLabel = activeKind === "consoles" ? "All Consoles" : activeKind === "games" ? "All Games" : `All ${categoryLabel(activeCategory)}`;
+      const allLabel = kindAllLabel();
       const allBtn = `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="">${escapeHtml(allLabel)} <span class="subcat-picker-count">(${totalCount})</span></button>`;
       const otherBtn = `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="__none__">Other / Uncategorized <span class="subcat-picker-count">(${otherCount})</span></button>`;
       bodyEl.innerHTML = allBtn + buildBrandPickerSectionHtml(brands, null, activeCategory) + (otherCount || !activeKind ? otherBtn : "");

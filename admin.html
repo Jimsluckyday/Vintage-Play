@@ -1637,7 +1637,8 @@
         const brandMeta = ALL_BRANDS.find((b) => b.slug === i.brand);
         const platform = brandMeta ? brandMeta.label : i.brand;
         const typed = itemTypesForCategory(i.category).length > 0;
-        const kind = !typed ? null : i.item_type === "consoles" ? "Consoles" : i.item_type === "accessories" ? "Accessories" : "Games";
+        const typeMeta = i.item_type ? itemTypesForCategory(i.category).find((t) => t.slug === i.item_type) : null;
+        const kind = !typed ? null : i.item_type === "consoles" ? "Consoles" : i.item_type === "accessories" ? "Accessories" : typeMeta && typeMeta.slug !== "games" ? typeMeta.label : "Games";
         // A platform already named "... Games" (Electronic Tabletop Games) doesn't need "\u00b7 Games" added.
         const label = kind
           ? kind === "Games" && /games$/i.test(platform)
