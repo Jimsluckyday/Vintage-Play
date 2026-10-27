@@ -2150,17 +2150,33 @@
     // R2 isn't reachable or configured yet, fall back to Supabase storage so
     // uploads never just break; the reason is shown in the Photo Storage box.
     let r2UploadDisabledReason = null;
+    let lastR2NetworkError = null;
 
     async function uploadToR2(body, fileName) {
       const { data } = await supabaseClient.auth.getSession();
       if (!data.session) throw new Error("not signed in");
       const form = new FormData();
       form.append("file", body, fileName || "photo.jpg");
-      const resp = await fetch("/api/upload", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${data.session.access_token}` },
-        body: form,
-      });
+      // A dropped connection ("Failed to fetch") is usually momentary, so try
+      // up to three times before giving up on this photo.
+      let resp;
+      for (let attempt = 1; ; attempt++) {
+        try {
+          resp = await fetch("/api/upload", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${data.session.access_token}` },
+            body: form,
+          });
+          break;
+        } catch (err) {
+          if (attempt >= 3) {
+            const netErr = new Error(`${err.message} (couldn't reach /api/upload after 3 tries)`);
+            netErr.network = true;
+            throw netErr;
+          }
+          await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+        }
+      }
       if (!resp.ok) {
         let detail = resp.statusText;
         try {
@@ -2193,9 +2209,12 @@
             toR2++;
             continue;
           } catch (err) {
-            r2UploadDisabledReason = err.message;
+            // A network blip only skips R2 for this one photo; a real R2 problem
+            // (not configured, not allowed) switches the rest of the session over.
+            if (!err.network) r2UploadDisabledReason = err.message;
+            else lastR2NetworkError = err.message;
             console.warn("R2 upload unavailable, using Supabase storage instead:", err);
-            setPhotoStatus(`Photos are being saved to Supabase instead of R2 (R2 said: ${err.message}). Uploads still work; see the R2 setup steps to switch.`);
+            setPhotoStatus(`This photo was saved to Supabase instead of R2 (R2 said: ${err.message}). Uploads still work; see the R2 setup steps to switch.`);
           }
         }
 
@@ -2215,7 +2234,7 @@
       if (toR2 && !toSupabase) {
         setUploadNote(`Photo upload: ${toR2} saved to Cloudflare R2.`, true);
       } else if (toSupabase) {
-        setUploadNote(`Photo upload: ${toSupabase} saved to Supabase instead of R2${r2UploadDisabledReason ? ` (R2 said: ${r2UploadDisabledReason})` : ""}.`, false);
+        setUploadNote(`Photo upload: ${toSupabase} saved to Supabase instead of R2${r2UploadDisabledReason || lastR2NetworkError ? ` (R2 said: ${r2UploadDisabledReason || lastR2NetworkError})` : ""}.`, false);
       }
       return urls;
     }
