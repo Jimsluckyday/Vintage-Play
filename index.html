@@ -344,6 +344,19 @@
       return item.brand === slug || seriesMatches(item, slug);
     }
 
+    // Inside the Skylanders views the A-Z bar and the title sort go by the CHARACTER / product name, not the
+    // word "Skylanders" every title starts with ("Skylanders Spyro's Adventure Camo Figure" files under C).
+    const SERIES_PREFIX = /^\s*skylanders\s+(?:(?:spyro['’]?s\s+adventure|swap[\s-]?force|super\s?chargers|giants|trap\s+team|imaginators|academy|lost\s+islands)\s+)?/i;
+
+    function inSeriesView() {
+      return activeKind === "skylanders" || activeBrand === "skylanders";
+    }
+
+    function titleKey(item) {
+      const t = (item.title || "").trim();
+      return inSeriesView() ? t.replace(SERIES_PREFIX, "") || t : t;
+    }
+
     function inExtraKind(item, slug) {
       return item.item_type === slug || seriesMatches(item, slug);
     }
@@ -902,11 +915,11 @@
       };
       const sorted = [...list];
       if (mode === "price-asc") {
-        sorted.sort((a, b) => priceOf(a) - priceOf(b) || a.title.localeCompare(b.title));
+        sorted.sort((a, b) => priceOf(a) - priceOf(b) || titleKey(a).localeCompare(titleKey(b)));
       } else if (mode === "price-desc") {
-        sorted.sort((a, b) => priceOf(b) - priceOf(a) || a.title.localeCompare(b.title));
+        sorted.sort((a, b) => priceOf(b) - priceOf(a) || titleKey(a).localeCompare(titleKey(b)));
       } else {
-        sorted.sort((a, b) => a.title.localeCompare(b.title));
+        sorted.sort((a, b) => titleKey(a).localeCompare(titleKey(b)));
       }
       return sorted;
     }
@@ -1074,7 +1087,7 @@
       const items = sortItems(
         scopedItems.filter((item) => {
           const matchesSearch = !term || item.title.toLowerCase().includes(term);
-          const matchesLetter = !activeLetter || item.title.trim()[0]?.toUpperCase() === activeLetter;
+          const matchesLetter = !activeLetter || titleKey(item)[0]?.toUpperCase() === activeLetter;
           return matchesSearch && matchesLetter;
         }),
         isRareView ? "price-desc" : activeSort
@@ -1237,7 +1250,7 @@
     function renderLetterBar(scopedItems) {
       const letterBarEl = document.getElementById("letterBar");
       const available = new Set(
-        scopedItems.map((item) => item.title.trim()[0]?.toUpperCase()).filter(Boolean)
+        scopedItems.map((item) => titleKey(item)[0]?.toUpperCase()).filter(Boolean)
       );
       letterBarEl.innerHTML = "";
       // A-Z jump bar is overkill for a short console list, and it crowds the filters above it.
