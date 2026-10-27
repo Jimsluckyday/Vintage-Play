@@ -331,9 +331,26 @@
 
     // Extra top-level splits inside a category besides Consoles and Games (e.g. Skylanders figures,
     // Accessories): each one that actually has items gets its own pill next to Consoles / Games.
+    // A game or set whose TITLE names one of these series (e.g. "Skylanders SuperChargers Starter Pack" on Xbox 360)
+    // also shows under that series' pill / subcategory, while staying under its own console. Nothing to tag by hand.
+    const SERIES_KEYWORDS = { skylanders: /skylanders/i };
+
+    function seriesMatches(item, slug) {
+      return !!SERIES_KEYWORDS[slug] && SERIES_KEYWORDS[slug].test(item.title || "");
+    }
+
+    // Subcategory test used everywhere: the item's own subcategory, or a series subcategory its title belongs to.
+    function brandMatches(item, slug) {
+      return item.brand === slug || seriesMatches(item, slug);
+    }
+
+    function inExtraKind(item, slug) {
+      return item.item_type === slug || seriesMatches(item, slug);
+    }
+
     function extraKindTypes(slug) {
       return itemTypesForCategory(slug).filter(
-        (t) => t.slug !== "consoles" && t.slug !== "games" && allItems.some((i) => i.category === slug && i.item_type === t.slug)
+        (t) => t.slug !== "consoles" && t.slug !== "games" && allItems.some((i) => i.category === slug && inExtraKind(i, t.slug))
       );
     }
 
@@ -347,9 +364,10 @@
     function kindMatches(item) {
       if (activeKind === "consoles") return item.item_type === "consoles";
       if (activeKind === "games") {
+        // Games = everything that is not a console and not a stand-alone extra type (figures, accessories).
         return item.item_type !== "consoles" && !extraKindTypes(item.category).some((t) => t.slug === item.item_type);
       }
-      if (activeKind) return item.item_type === activeKind;
+      if (activeKind) return inExtraKind(item, activeKind);
       return true;
     }
 
@@ -589,7 +607,7 @@
     // the global picker, which passes one category's brands at a time already
     // scoped by the caller's own loop variable.
     function buildBrandPickerSectionHtml(brands, sectionLabel, categorySlug, withOther = false) {
-      const countFor = (b) => allItems.filter((i) => i.category === categorySlug && i.brand === b.slug && kindMatches(i)).length;
+      const countFor = (b) => allItems.filter((i) => i.category === categorySlug && brandMatches(i, b.slug) && kindMatches(i)).length;
       const leafHtml = (b) =>
         `<button type="button" class="subcat-picker-item" data-searchable data-brand-slug="${b.slug}">${escapeHtml(b.label)} <span class="subcat-picker-count">(${countFor(b)})</span></button>`;
 
@@ -711,8 +729,8 @@
       }
       const inCat = allItems.filter((i) => i.category === activeCategory);
       const nConsoles = inCat.filter((i) => i.item_type === "consoles").length;
-      const extraCounts = extraKinds.map((t) => ({ t, n: inCat.filter((i) => i.item_type === t.slug).length }));
-      const nGames = inCat.length - nConsoles - extraCounts.reduce((s, x) => s + x.n, 0);
+      const extraCounts = extraKinds.map((t) => ({ t, n: inCat.filter((i) => inExtraKind(i, t.slug)).length }));
+      const nGames = inCat.filter((i) => i.item_type !== "consoles" && !extraKinds.some((t) => t.slug === i.item_type)).length;
       const pill = (kind, label) =>
         `<button type="button" data-kind="${kind}" class="${(activeKind || "") === kind ? "active" : ""}">${label}</button>`;
       el.innerHTML =
@@ -790,7 +808,7 @@
       const bodyEl = document.getElementById("subcatBody");
       let brands = currentCategoryBrands();
       // With Consoles or Games chosen, only list the platforms that have that kind of item.
-      if (activeKind) brands = brands.filter((b) => allItems.some((i) => i.category === activeCategory && i.brand === b.slug && kindMatches(i) && makerMatches(i)));
+      if (activeKind) brands = brands.filter((b) => allItems.some((i) => i.category === activeCategory && brandMatches(i, b.slug) && kindMatches(i) && makerMatches(i)));
       const usesDropdown = categoryUsesDropdown(activeCategory) && brands.length > 0;
       pickerEl.hidden = !usesDropdown;
       if (!usesDropdown) return;
@@ -987,7 +1005,7 @@
         renderLetterBar(allItems.filter((item) => item.category === activeCategory));
         categoryBrands.forEach((brand) => {
           const count = allItems.filter(
-            (item) => item.category === activeCategory && item.brand === brand.slug
+            (item) => item.category === activeCategory && brandMatches(item, brand.slug)
           ).length;
           const card = document.createElement("div");
           card.className = "card";
@@ -1042,11 +1060,11 @@
             activeItemType === "__none__" ? !item.item_type || !itemTypesKnown.has(item.item_type) : item.item_type === activeItemType;
           if (!matchesType) return false;
           if (activeBrand === "__none__") return !item.brand;
-          if (activeBrand) return item.brand === activeBrand;
+          if (activeBrand) return brandMatches(item, activeBrand);
           return true;
         }
         if (activeBrand === "__none__") return !item.brand;
-        if (activeBrand) return item.brand === activeBrand;
+        if (activeBrand) return brandMatches(item, activeBrand);
         return true;
       });
 
