@@ -1478,6 +1478,10 @@
     }
     let inventorySort = "created_at";
     let inventoryLetterFilter = null;
+    // A leading "The" is ignored for the A-Z sort and letter bar ("The Elder Scrolls III: Morrowind" files under E).
+    function sortTitle(title) {
+      return (title || "").trim().replace(/^the\s+(?=\S)/i, "");
+    }
 
     // The Category drop-down lists each category, then (for categories with item types, like Video
     // Games) one indented entry per type: "Video Games > Consoles (31)". Picking one scopes the whole
@@ -1700,7 +1704,7 @@
     function renderInventoryLetterBar(scopedItems) {
       const barEl = document.getElementById("inventoryLetterBar");
       const available = new Set(
-        scopedItems.map((item) => item.title.trim()[0]?.toUpperCase()).filter(Boolean)
+        scopedItems.map((item) => sortTitle(item.title)[0]?.toUpperCase()).filter(Boolean)
       );
       barEl.innerHTML = "";
 
@@ -1789,13 +1793,13 @@
 
       const filtered = preLetter.filter((item) => {
         if (!inventoryLetterFilter) return true;
-        const first = item.title.trim()[0]?.toUpperCase() || "";
+        const first = sortTitle(item.title)[0]?.toUpperCase() || "";
         if (inventoryLetterFilter === "#") return !/[A-Z]/.test(first);
         return first === inventoryLetterFilter;
       });
 
       if (inventorySort === "title") {
-        filtered.sort((a, b) => a.title.localeCompare(b.title));
+        filtered.sort((a, b) => sortTitle(a.title).localeCompare(sortTitle(b.title)));
       }
       // "created_at" needs no client-side sort -- items[] already arrives in
       // that order from loadItems()'s query.

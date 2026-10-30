@@ -352,9 +352,11 @@
       return activeKind === "skylanders" || activeBrand === "skylanders";
     }
 
+    // A leading "The" is ignored for sorting and the A-Z bar ("The Elder Scrolls III: Morrowind" files under E).
     function titleKey(item) {
-      const t = (item.title || "").trim();
-      return inSeriesView() ? t.replace(SERIES_PREFIX, "") || t : t;
+      let t = (item.title || "").trim();
+      if (inSeriesView()) t = t.replace(SERIES_PREFIX, "") || t;
+      return t.replace(/^the\s+(?=\S)/i, "");
     }
 
     function inExtraKind(item, slug) {
