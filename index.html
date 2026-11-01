@@ -333,7 +333,7 @@
     // Accessories): each one that actually has items gets its own pill next to Consoles / Games.
     // A game or set whose TITLE names one of these series (e.g. "Skylanders SuperChargers Starter Pack" on Xbox 360)
     // also shows under that series' pill / subcategory, while staying under its own console. Nothing to tag by hand.
-    const SERIES_KEYWORDS = { skylanders: /skylanders/i };
+    const SERIES_KEYWORDS = { skylanders: /skylanders/i, infinity: /disney\s+infinity/i };
 
     function seriesMatches(item, slug) {
       return !!SERIES_KEYWORDS[slug] && SERIES_KEYWORDS[slug].test(item.title || "");
@@ -344,18 +344,25 @@
       return item.brand === slug || seriesMatches(item, slug);
     }
 
-    // Inside the Skylanders views the A-Z bar and the title sort go by the CHARACTER / product name, not the
-    // word "Skylanders" every title starts with ("Skylanders Spyro's Adventure Camo Figure" files under C).
-    const SERIES_PREFIX = /^\s*skylanders\s+(?:(?:spyro['’]?s\s+adventure|swap[\s-]?force|super\s?chargers|giants|trap\s+team|imaginators|academy|lost\s+islands)\s+)?/i;
+    // Inside a series view (Skylanders, Disney Infinity) the A-Z bar and the title sort go by the CHARACTER / product name,
+    // not the words every title starts with ("Skylanders Spyro's Adventure Camo Figure" files under C).
+    const SERIES_PREFIXES = {
+      skylanders: /^\s*skylanders\s+(?:(?:spyro['’]?s\s+adventure|swap[\s-]?force|super\s?chargers|giants|trap\s+team|imaginators|academy|lost\s+islands)\s+)?/i,
+      infinity: /^\s*disney\s+infinity:?\s*(?:[1-3]\.0\s*)?(?:edition:?\s*)?/i,
+    };
 
-    function inSeriesView() {
-      return activeKind === "skylanders" || activeBrand === "skylanders";
+    function activeSeries() {
+      for (const slug of Object.keys(SERIES_PREFIXES)) {
+        if (activeKind === slug || activeBrand === slug) return slug;
+      }
+      return null;
     }
 
     // A leading "The" is ignored for sorting and the A-Z bar ("The Elder Scrolls III: Morrowind" files under E).
     function titleKey(item) {
       let t = (item.title || "").trim();
-      if (inSeriesView()) t = t.replace(SERIES_PREFIX, "") || t;
+      const series = activeSeries();
+      if (series) t = t.replace(SERIES_PREFIXES[series], "") || t;
       return t.replace(/^the\s+(?=\S)/i, "");
     }
 
