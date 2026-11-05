@@ -1388,6 +1388,17 @@
       const availableDesc = byPriceDesc.filter((v) => v.status === "available");
       const ranked = availableDesc.length ? availableDesc : byPriceDesc;
       const first = ranked.find((v) => v.description) || ranked[0];
+      // Shared description: the fullest one in the group, so a short or blank
+      // description on the top copy never hides the game blurb. When the group
+      // mixes completeness levels, the "loose cartridge only (no box...)" wording
+      // of a loose copy's blurb is dropped, since it would contradict a boxed copy.
+      const mixedGroup = new Set(variants.map((v) => v.completeness)).size > 1;
+      const cleanDescription = (v) => {
+        let d = v.description || "";
+        if (mixedGroup) d = d.replace(/,?\s*loose cartridge only\s*\([^)]*\)/i, "").replace(/\s{2,}/g, " ");
+        return d.trim();
+      };
+      const descText = ranked.map(cleanDescription).sort((a, b) => b.length - a.length)[0] || "";
       lightboxGroupVariants = variants;
       const firstWithPhotos = ranked.find((v) => v.photo_urls && v.photo_urls.length) || byPriceDesc.find((v) => v.photo_urls && v.photo_urls.length) || first;
       lightboxPhotos = firstWithPhotos.photo_urls || [];
@@ -1408,8 +1419,8 @@
       ageEl.textContent = first.release_year ? `Age: ${first.release_year}` : "";
 
       const descEl = document.getElementById("lbDescription");
-      descEl.hidden = !first.description;
-      descEl.textContent = first.description || "";
+      descEl.hidden = !descText;
+      descEl.textContent = descText;
 
       const variantsEl = document.getElementById("lbVariants");
       variantsEl.hidden = false;
