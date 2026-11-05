@@ -1381,9 +1381,15 @@
     // by the public site (see loadItems()).
     let lightboxGroupVariants = [];
     function openGroupDetails(variants) {
-      const first = variants[0];
+      // Most expensive copy first (a complete or new copy shouldn't sit under a
+      // loose one): the list below, the lead photo and the shared description
+      // all come from that top copy, preferring copies that are still available.
+      const byPriceDesc = [...variants].sort((a, b) => effectivePrice(b) - effectivePrice(a));
+      const availableDesc = byPriceDesc.filter((v) => v.status === "available");
+      const ranked = availableDesc.length ? availableDesc : byPriceDesc;
+      const first = ranked.find((v) => v.description) || ranked[0];
       lightboxGroupVariants = variants;
-      const firstWithPhotos = variants.find((v) => v.photo_urls && v.photo_urls.length) || first;
+      const firstWithPhotos = ranked.find((v) => v.photo_urls && v.photo_urls.length) || byPriceDesc.find((v) => v.photo_urls && v.photo_urls.length) || first;
       lightboxPhotos = firstWithPhotos.photo_urls || [];
       lightboxIndex = 0;
       lightboxAlt = first.title;
@@ -1407,8 +1413,7 @@
 
       const variantsEl = document.getElementById("lbVariants");
       variantsEl.hidden = false;
-      const sorted = [...variants].sort((a, b) => effectivePrice(a) - effectivePrice(b));
-      variantsEl.innerHTML = sorted
+      variantsEl.innerHTML = byPriceDesc
         .map((v) => {
           const conditionText = conditionTagLabel(v) || "Condition not specified";
           // Always render a notes line, even when blank — a variant with no
