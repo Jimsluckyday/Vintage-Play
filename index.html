@@ -358,12 +358,12 @@
       return null;
     }
 
-    // A leading "The" is ignored for sorting and the A-Z bar ("The Elder Scrolls III: Morrowind" files under E).
+    // A leading "The" or "A" is ignored for sorting and the A-Z bar ("The Elder Scrolls III: Morrowind" files under E, "A Bug's Life" under B).
     function titleKey(item) {
       let t = (item.title || "").trim();
       const series = activeSeries();
       if (series) t = t.replace(SERIES_PREFIXES[series], "") || t;
-      return t.replace(/^the\s+(?=\S)/i, "");
+      return t.replace(/^(?:the|a)\s+(?=\S)/i, "");
     }
 
     function inExtraKind(item, slug) {

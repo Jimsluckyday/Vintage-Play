@@ -1478,9 +1478,9 @@
     }
     let inventorySort = "created_at";
     let inventoryLetterFilter = null;
-    // A leading "The" is ignored for the A-Z sort and letter bar ("The Elder Scrolls III: Morrowind" files under E).
+    // A leading "The" or "A" is ignored for the A-Z sort and letter bar ("The Elder Scrolls III: Morrowind" files under E, "A Bug's Life" under B).
     function sortTitle(title) {
-      return (title || "").trim().replace(/^the\s+(?=\S)/i, "");
+      return (title || "").trim().replace(/^(?:the|a)\s+(?=\S)/i, "");
     }
 
     // The Category drop-down lists each category, then (for categories with item types, like Video
