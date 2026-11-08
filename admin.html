@@ -297,6 +297,10 @@
     <div class="section">
       <h2>Inventory (<span id="itemCount">0</span>)</h2>
       <div class="btn-row">
+        <button type="button" class="btn secondary" id="exportInventoryBtn">Download full inventory (opens in Excel)</button>
+        <span class="hint" id="exportInventoryNote" style="margin:0;">Every listing, including items on hold and sold, whatever filters are set below.</span>
+      </div>
+      <div class="btn-row">
         <input type="text" id="inventorySearch" placeholder="Search by title..." style="max-width:300px;" />
         <select id="inventoryCategoryFilter" style="max-width:220px;"></select>
         <select id="inventoryBrandFilter" style="max-width:220px;"></select>
@@ -804,6 +808,7 @@
       document.getElementById("inventoryHoldFilterBtn").classList.toggle("active", holdFilterOnly);
       resetInventoryPaging();
     });
+    document.getElementById("exportInventoryBtn").addEventListener("click", exportInventory);
     document.getElementById("inventoryMissingPhotoBtn").addEventListener("click", () => {
       missingPhotoOnly = !missingPhotoOnly;
       resetInventoryPaging();
@@ -1449,6 +1454,68 @@
 
     function needsPhoto(item) {
       return item.status !== "sold" && !item.on_hold_at && !hasPhoto(item);
+    }
+
+    // One row per listing for the spreadsheet export: everything in the database in plain columns, plus Status
+    // (For sale / On hold / Sold), the hold reason, system, box and private notes, so the inventory can live in one file.
+    function buildInventoryCsv() {
+      const typeLabel = (it) => {
+        const t = ALL_ITEM_TYPES.find((x) => x.slug === it.item_type && x.category === it.category);
+        return t ? t.label : it.item_type || "";
+      };
+      const day = (v) => (v ? String(v).slice(0, 10) : "");
+      const rows = items.map((it) => {
+        const brand = ALL_BRANDS.find((b) => b.slug === it.brand && b.category === it.category);
+        const hold = holdReason(it);
+        const qty = Number(it.quantity) || 0;
+        const price = it.asking_price == null ? "" : Number(it.asking_price);
+        const cost = it.cost_basis == null ? "" : Number(it.cost_basis);
+        return {
+          "Title": it.title || "",
+          "Section": categoryLabel(it.category),
+          "Group": (brand && brand.group_label) || "",
+          "System / brand": brand ? brand.label : it.brand || "",
+          "Type": typeLabel(it),
+          "Condition": it.condition_grade || "",
+          "Completeness": it.completeness || "",
+          "Year": it.release_year || "",
+          "Qty": qty,
+          "Price": price,
+          "Cost": cost,
+          "Value at price (Qty x Price)": price === "" ? "" : Math.round(qty * price * 100) / 100,
+          "Status": it.status === "sold" ? "Sold" : it.on_hold_at ? "On hold" : "For sale",
+          "Why on hold": hold ? hold.badge : "",
+          "Box / tote": it.tote || "",
+          "Photos": Array.isArray(it.photo_urls) ? it.photo_urls.length : 0,
+          "Price last checked": day(it.price_checked_at),
+          "Added": day(it.created_at),
+          "Variant group": it.variant_group || "",
+          "Condition note (public)": it.condition_notes || "",
+          "Description (public)": it.description || "",
+          "Private notes": it.internal_notes || "",
+          "Item ID": it.id,
+        };
+      });
+      // "﻿" lets Excel read accents correctly; escapeFormulae stops a title starting with = + - @ running as a formula.
+      return { csv: "﻿" + Papa.unparse(rows, { escapeFormulae: true }), count: rows.length };
+    }
+
+    function exportInventory() {
+      const note = document.getElementById("exportInventoryNote");
+      if (!items.length) {
+        note.textContent = "Nothing is loaded yet. Wait for the inventory list to appear, then try again.";
+        return;
+      }
+      const { csv, count } = buildInventoryCsv();
+      const today = new Date().toISOString().slice(0, 10);
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      link.download = `Vintage Play Inventory ${today}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      note.textContent = `Downloaded ${count} listings (${link.download}). Open it in Excel; it is a snapshot, so download again for a fresh one.`;
     }
 
     // One listing can hold copies in more than one tote, written as "Tote 1 x1, Tote 2 x2"
