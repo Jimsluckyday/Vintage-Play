@@ -297,7 +297,8 @@
     <div class="section">
       <h2>Inventory (<span id="itemCount">0</span>)</h2>
       <div class="btn-row">
-        <button type="button" class="btn secondary" id="exportInventoryBtn">Download full inventory (opens in Excel)</button>
+        <button type="button" class="btn secondary" id="exportInventoryXlsxBtn">Download inventory workbook (Excel, with summary)</button>
+        <button type="button" class="btn secondary" id="exportInventoryBtn">Download as CSV</button>
         <span class="hint" id="exportInventoryNote" style="margin:0;">Every listing, including items on hold and sold, whatever filters are set below.</span>
       </div>
       <div class="btn-row">
@@ -332,6 +333,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="/config.js"></script>
   <script>
     // Matches RARE_THRESHOLD in index.html -- what the public site's Rare
@@ -809,6 +811,7 @@
       resetInventoryPaging();
     });
     document.getElementById("exportInventoryBtn").addEventListener("click", exportInventory);
+    document.getElementById("exportInventoryXlsxBtn").addEventListener("click", exportInventoryWorkbook);
     document.getElementById("inventoryMissingPhotoBtn").addEventListener("click", () => {
       missingPhotoOnly = !missingPhotoOnly;
       resetInventoryPaging();
@@ -1458,7 +1461,7 @@
 
     // One row per listing for the spreadsheet export: everything in the database in plain columns, plus Status
     // (For sale / On hold / Sold), the hold reason, system, box and private notes, so the inventory can live in one file.
-    function buildInventoryCsv() {
+    function inventoryRows() {
       const typeLabel = (it) => {
         const t = ALL_ITEM_TYPES.find((x) => x.slug === it.item_type && x.category === it.category);
         return t ? t.label : it.item_type || "";
@@ -1496,8 +1499,92 @@
           "Item ID": it.id,
         };
       });
+      return rows;
+    }
+
+    function buildInventoryCsv() {
+      const rows = inventoryRows();
       // "﻿" lets Excel read accents correctly; escapeFormulae stops a title starting with = + - @ running as a formula.
       return { csv: "﻿" + Papa.unparse(rows, { escapeFormulae: true }), count: rows.length };
+    }
+
+    // Excel workbook: Summary (by section and system), All inventory, and On hold, in one file.
+    function buildInventoryWorkbook() {
+      const rows = inventoryRows().sort((a, b) =>
+        a["Section"].localeCompare(b["Section"]) || a["Group"].localeCompare(b["Group"]) ||
+        String(a["System / brand"]).localeCompare(String(b["System / brand"])) || a["Title"].localeCompare(b["Title"]));
+      const money = "$#,##0.00";
+      const today = new Date().toISOString().slice(0, 10);
+      const wb = XLSX.utils.book_new();
+
+      const agg = new Map();
+      rows.forEach((r) => {
+        const key = [r["Section"], r["Group"], r["System / brand"]].join("\u0001");
+        const a = agg.get(key) || { section: r["Section"], group: r["Group"], system: r["System / brand"], listings: 0, sale: 0, hold: 0, value: 0, cost: 0, nophoto: 0 };
+        a.listings += 1;
+        if (r["Status"] === "For sale") {
+          a.sale += r["Qty"];
+          a.value += Number(r["Value at price (Qty x Price)"]) || 0;
+          a.cost += (Number(r["Cost"]) || 0) * r["Qty"];
+          if (!r["Photos"]) a.nophoto += 1;
+        } else if (r["Status"] === "On hold") {
+          a.hold += r["Qty"];
+        }
+        agg.set(key, a);
+      });
+      const lines = [...agg.values()].sort((a, b) =>
+        a.section.localeCompare(b.section) || a.group.localeCompare(b.group) || String(a.system).localeCompare(String(b.system)));
+      const total = lines.reduce((t, a) => ({
+        listings: t.listings + a.listings, sale: t.sale + a.sale, hold: t.hold + a.hold,
+        value: t.value + a.value, cost: t.cost + a.cost, nophoto: t.nophoto + a.nophoto,
+      }), { listings: 0, sale: 0, hold: 0, value: 0, cost: 0, nophoto: 0 });
+      const r2 = (n) => Math.round(n * 100) / 100;
+      const head = ["Section", "Group", "System / brand", "Listings", "Units for sale", "Units on hold", "Value at price (for sale)", "Cost of units for sale", "For-sale listings with no photo"];
+      const aoa = [
+        ["Vintage Play Collectables: inventory summary"],
+        [`Snapshot taken ${today} (${rows.length} listings). Download again for a fresh one.`],
+        [],
+        head,
+        ...lines.map((a) => [a.section, a.group, a.system, a.listings, a.sale, a.hold, r2(a.value), r2(a.cost), a.nophoto]),
+        ["TOTAL", "", "", total.listings, total.sale, total.hold, r2(total.value), r2(total.cost), total.nophoto],
+      ];
+      const sum = XLSX.utils.aoa_to_sheet(aoa);
+      sum["!cols"] = [20, 12, 34, 10, 13, 13, 22, 20, 20].map((wch) => ({ wch }));
+      for (let r = 4; r < aoa.length; r++) {
+        [6, 7].forEach((c) => { const cell = sum[XLSX.utils.encode_cell({ r, c })]; if (cell) cell.z = money; });
+      }
+      XLSX.utils.book_append_sheet(wb, sum, "Summary");
+
+      const all = XLSX.utils.json_to_sheet(rows);
+      all["!cols"] = [44, 14, 12, 22, 14, 11, 16, 7, 6, 9, 9, 12, 10, 20, 26, 7, 12, 11, 20, 50, 50, 50, 38].map((wch) => ({ wch }));
+      for (let r = 1; r <= rows.length; r++) {
+        [9, 10, 11].forEach((c) => { const cell = all[XLSX.utils.encode_cell({ r, c })]; if (cell && typeof cell.v === "number") cell.z = money; });
+      }
+      all["!autofilter"] = { ref: all["!ref"] };
+      XLSX.utils.book_append_sheet(wb, all, "All inventory");
+
+      const held = rows.filter((r) => r["Status"] === "On hold").map((r) => ({
+        "Title": r["Title"], "Section": r["Section"], "System / brand": r["System / brand"], "Qty": r["Qty"], "Price": r["Price"],
+        "Why on hold": r["Why on hold"], "Photos": r["Photos"], "Box / tote": r["Box / tote"], "Private notes": String(r["Private notes"]).slice(0, 300),
+      }));
+      const hold = XLSX.utils.json_to_sheet(held);
+      hold["!cols"] = [44, 14, 22, 6, 9, 22, 7, 28, 70].map((wch) => ({ wch }));
+      for (let r = 1; r <= held.length; r++) { const cell = hold[XLSX.utils.encode_cell({ r, c: 4 })]; if (cell && typeof cell.v === "number") cell.z = money; }
+      hold["!autofilter"] = { ref: hold["!ref"] };
+      XLSX.utils.book_append_sheet(wb, hold, "On hold");
+      return { wb, count: rows.length, held: held.length };
+    }
+
+    function exportInventoryWorkbook() {
+      const note = document.getElementById("exportInventoryNote");
+      if (!items.length) {
+        note.textContent = "Nothing is loaded yet. Wait for the inventory list to appear, then try again.";
+        return;
+      }
+      const { wb, count, held } = buildInventoryWorkbook();
+      const file = `Vintage Play Inventory ${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(wb, file);
+      note.textContent = `Downloaded ${count} listings (${held} on hold) as ${file}: tabs Summary, All inventory and On hold. It is a snapshot, so download again for a fresh one.`;
     }
 
     function exportInventory() {
