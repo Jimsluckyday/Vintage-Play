@@ -321,7 +321,9 @@
           <option value="photo">Pending check - photographed (ready for me to check)</option>
           <option value="nophoto">Pending check - no photo yet</option>
           <option value="any">Pending check - all</option>
-          <option value="disc">Held for a disc issue (repair or donate)</option>
+        </select>
+        <select id="inventoryRepairFilter" style="max-width:300px;" title="Discs with a condition issue, kept off the store until they are repaired (or donated). Pick a system to see just its damaged discs.">
+          <option value="all">Needs repair: not filtering</option>
         </select>
       </div>
       <div class="btn-row" id="inventoryLetterBar" style="margin-top:0.5rem;"></div>
@@ -817,6 +819,7 @@
       resetInventoryPaging();
     });
     document.getElementById("inventoryToteFilter").addEventListener("change", resetInventoryPaging);
+    document.getElementById("inventoryRepairFilter").addEventListener("change", resetInventoryPaging);
     document.getElementById("inventoryPendingFilter").addEventListener("change", resetInventoryPaging);
     document.getElementById("inventoryLoadMoreBtn").addEventListener("click", () => {
       inventoryPagesShown++;
@@ -1430,6 +1433,13 @@
       return !!item.on_hold_at && (item.internal_notes || "").includes("PENDING-CHECK");
     }
 
+    // A disc that needs repair (the '**Condition issue on disc**' marker). These are held so they stay off the store,
+    // but they are NOT counted as a plain hold: they have their own "Needs repair" filter and badge, so the On Hold list
+    // and the "have I photographed everything" checks are not full of damaged discs waiting for the resurfacer.
+    function isRepair(item) {
+      return !!item.on_hold_at && /Condition issues? on (the )?disc/i.test(`${item.internal_notes || ""} ${item.condition_notes || ""}`);
+    }
+
     // Why an item is on hold, read from the private notes, so the list says it instead of one generic badge.
     // A disc-issue hold (owner's '**Condition issue on disc**' marker) must never look like a plain waiting-for-photos hold.
     // The disc-issue marker lives in the private notes for the bulk-uploaded CDs/DVDs ("**Condition issue on disc**"), but the
@@ -1440,12 +1450,12 @@
       const notes = item.internal_notes || "";
       const cond = item.condition_notes || "";
       const both = `${notes} ${cond}`;
-      if (/Condition issues? on (the )?disc/i.test(both)) {
+      if (isRepair(item)) {
         return {
-          badge: "DISC ISSUE - ON HOLD",
+          badge: "NEEDS REPAIR",
           text: item.category === "music"
-            ? "Held: condition issue on the disc (repair it if the album is worth it, otherwise donate)."
-            : "Held: condition issue on the disc (resurface or repair it if it is worth it, otherwise donate).",
+            ? "Needs repair: condition issue on the disc (repair it if the album is worth it, otherwise donate). Kept off the store."
+            : "Needs repair: condition issue on the disc (resurface or repair it if it is worth it, otherwise donate). Kept off the store.",
         };
       }
       if (isPendingCheck(item) && notes.includes("UNPRICED PLACEHOLDER")) return { badge: "NOT PRICED YET", text: "Held: not priced yet. The $1.99 is a placeholder; it needs a photo and a sold check before release." };
@@ -1486,8 +1496,8 @@
           "Price": price,
           "Cost": cost,
           "Value at price (Qty x Price)": price === "" ? "" : Math.round(qty * price * 100) / 100,
-          "Status": it.status === "sold" ? "Sold" : it.on_hold_at ? "On hold" : "For sale",
-          "Why on hold": hold ? hold.badge : "",
+          "Status": it.status === "sold" ? "Sold" : isRepair(it) ? "Needs repair" : it.on_hold_at ? "On hold" : "For sale",
+          "Why on hold / repair": hold ? hold.badge : "",
           "Box / tote": it.tote || "",
           "Photos": Array.isArray(it.photo_urls) ? it.photo_urls.length : 0,
           "Price last checked": day(it.price_checked_at),
@@ -1520,7 +1530,7 @@
       const agg = new Map();
       rows.forEach((r) => {
         const key = [r["Section"], r["Group"], r["System / brand"]].join("\u0001");
-        const a = agg.get(key) || { section: r["Section"], group: r["Group"], system: r["System / brand"], listings: 0, sale: 0, hold: 0, value: 0, cost: 0, nophoto: 0 };
+        const a = agg.get(key) || { section: r["Section"], group: r["Group"], system: r["System / brand"], listings: 0, sale: 0, hold: 0, repair: 0, value: 0, cost: 0, nophoto: 0 };
         a.listings += 1;
         if (r["Status"] === "For sale") {
           a.sale += r["Qty"];
@@ -1529,27 +1539,29 @@
           if (!r["Photos"]) a.nophoto += 1;
         } else if (r["Status"] === "On hold") {
           a.hold += r["Qty"];
+        } else if (r["Status"] === "Needs repair") {
+          a.repair += r["Qty"];
         }
         agg.set(key, a);
       });
       const lines = [...agg.values()].sort((a, b) =>
         a.section.localeCompare(b.section) || a.group.localeCompare(b.group) || String(a.system).localeCompare(String(b.system)));
       const total = lines.reduce((t, a) => ({
-        listings: t.listings + a.listings, sale: t.sale + a.sale, hold: t.hold + a.hold,
+        listings: t.listings + a.listings, sale: t.sale + a.sale, hold: t.hold + a.hold, repair: t.repair + a.repair,
         value: t.value + a.value, cost: t.cost + a.cost, nophoto: t.nophoto + a.nophoto,
-      }), { listings: 0, sale: 0, hold: 0, value: 0, cost: 0, nophoto: 0 });
+      }), { listings: 0, sale: 0, hold: 0, repair: 0, value: 0, cost: 0, nophoto: 0 });
       const r2 = (n) => Math.round(n * 100) / 100;
-      const head = ["Section", "Group", "System / brand", "Listings", "Units for sale", "Units on hold", "Value at price (for sale)", "Cost of units for sale", "For-sale listings with no photo"];
+      const head = ["Section", "Group", "System / brand", "Listings", "Units for sale", "Units on hold", "Value at price (for sale)", "Cost of units for sale", "For-sale listings with no photo", "Units needing repair"];
       const aoa = [
         ["Vintage Play Collectables: inventory summary"],
         [`Snapshot taken ${today} (${rows.length} listings). Download again for a fresh one.`],
         [],
         head,
-        ...lines.map((a) => [a.section, a.group, a.system, a.listings, a.sale, a.hold, r2(a.value), r2(a.cost), a.nophoto]),
-        ["TOTAL", "", "", total.listings, total.sale, total.hold, r2(total.value), r2(total.cost), total.nophoto],
+        ...lines.map((a) => [a.section, a.group, a.system, a.listings, a.sale, a.hold, r2(a.value), r2(a.cost), a.nophoto, a.repair]),
+        ["TOTAL", "", "", total.listings, total.sale, total.hold, r2(total.value), r2(total.cost), total.nophoto, total.repair],
       ];
       const sum = XLSX.utils.aoa_to_sheet(aoa);
-      sum["!cols"] = [20, 12, 34, 10, 13, 13, 22, 20, 20].map((wch) => ({ wch }));
+      sum["!cols"] = [20, 12, 34, 10, 13, 13, 22, 20, 20, 18].map((wch) => ({ wch }));
       for (let r = 4; r < aoa.length; r++) {
         [6, 7].forEach((c) => { const cell = sum[XLSX.utils.encode_cell({ r, c })]; if (cell) cell.z = money; });
       }
@@ -1565,14 +1577,23 @@
 
       const held = rows.filter((r) => r["Status"] === "On hold").map((r) => ({
         "Title": r["Title"], "Section": r["Section"], "System / brand": r["System / brand"], "Qty": r["Qty"], "Price": r["Price"],
-        "Why on hold": r["Why on hold"], "Photos": r["Photos"], "Box / tote": r["Box / tote"], "Private notes": String(r["Private notes"]).slice(0, 300),
+        "Why on hold": r["Why on hold / repair"], "Photos": r["Photos"], "Box / tote": r["Box / tote"], "Private notes": String(r["Private notes"]).slice(0, 300),
       }));
+      const fix = rows.filter((r) => r["Status"] === "Needs repair").map((r) => ({
+        "Title": r["Title"], "Section": r["Section"], "System / brand": r["System / brand"], "Qty": r["Qty"], "Price": r["Price"], "Cost": r["Cost"],
+        "Completeness": r["Completeness"], "Box / tote": r["Box / tote"], "Item ID": r["Item ID"],
+      }));
+      const repairSheet = XLSX.utils.json_to_sheet(fix);
+      repairSheet["!cols"] = [44, 14, 22, 6, 9, 9, 18, 28, 38].map((wch) => ({ wch }));
+      for (let r = 1; r <= fix.length; r++) { [4, 5].forEach((c) => { const cell = repairSheet[XLSX.utils.encode_cell({ r, c })]; if (cell && typeof cell.v === "number") cell.z = money; }); }
+      repairSheet["!autofilter"] = { ref: repairSheet["!ref"] };
       const hold = XLSX.utils.json_to_sheet(held);
       hold["!cols"] = [44, 14, 22, 6, 9, 22, 7, 28, 70].map((wch) => ({ wch }));
       for (let r = 1; r <= held.length; r++) { const cell = hold[XLSX.utils.encode_cell({ r, c: 4 })]; if (cell && typeof cell.v === "number") cell.z = money; }
       hold["!autofilter"] = { ref: hold["!ref"] };
       XLSX.utils.book_append_sheet(wb, hold, "On hold");
-      return { wb, count: rows.length, held: held.length };
+      XLSX.utils.book_append_sheet(wb, repairSheet, "Needs repair");
+      return { wb, count: rows.length, held: held.length, repair: fix.length };
     }
 
     function exportInventoryWorkbook() {
@@ -1581,10 +1602,10 @@
         note.textContent = "Nothing is loaded yet. Wait for the inventory list to appear, then try again.";
         return;
       }
-      const { wb, count, held } = buildInventoryWorkbook();
+      const { wb, count, held, repair } = buildInventoryWorkbook();
       const file = `Vintage Play Inventory ${new Date().toISOString().slice(0, 10)}.xlsx`;
       XLSX.writeFile(wb, file);
-      note.textContent = `Downloaded ${count} listings (${held} on hold) as ${file}: tabs Summary, All inventory and On hold. It is a snapshot, so download again for a fresh one.`;
+      note.textContent = `Downloaded ${count} listings (${held} on hold, ${repair} needing repair) as ${file}: tabs Summary, All inventory, On hold and Needs repair. It is a snapshot, so download again for a fresh one.`;
     }
 
     function exportInventory() {
@@ -1921,8 +1942,23 @@
       pendingSel.options[1].textContent = `Pending check - photographed, ready for me to check (${pendingPhoto})`;
       pendingSel.options[2].textContent = `Pending check - no photo yet (${pendingAll.length - pendingPhoto})`;
       pendingSel.options[3].textContent = `Pending check - all (${pendingAll.length})`;
-      pendingSel.options[4].textContent = `Held for a disc issue - repair or donate (${items.filter((i) => holdReason(i) && holdReason(i).badge === "DISC ISSUE - ON HOLD").length})`;
       const pendingFilter = pendingSel.value;
+      // "Needs repair" dropdown: all damaged discs, or just one system's. Rebuilt only when the counts change so the choice sticks.
+      const repairSel = document.getElementById("inventoryRepairFilter");
+      const repairItems = items.filter(isRepair);
+      const repairByBrand = new Map();
+      repairItems.forEach((i) => repairByBrand.set(i.brand || "", (repairByBrand.get(i.brand || "") || 0) + 1));
+      const repairSig = JSON.stringify([...repairByBrand.entries()].sort());
+      if (repairSel.dataset.sig !== repairSig) {
+        const keep = repairSel.value;
+        const brandName = (slug) => { const b = ALL_BRANDS.find((x) => x.slug === slug); return b ? b.label : slug || "No system"; };
+        repairSel.innerHTML = `<option value="all">Needs repair: not filtering</option><option value="any">Needs repair - all systems (${repairItems.length})</option>` +
+          [...repairByBrand.entries()].sort((a, b) => brandName(a[0]).localeCompare(brandName(b[0])))
+            .map(([slug, n]) => `<option value="${escapeHtml(slug)}">Needs repair - ${escapeHtml(brandName(slug))} (${n})</option>`).join("");
+        repairSel.dataset.sig = repairSig;
+        repairSel.value = [...repairSel.options].some((o) => o.value === keep) ? keep : "all";
+      }
+      const repairFilter = repairSel.value;
 
       const preLetter = items.filter((item) => {
         const matchesSearch = !searchTerm || item.title.toLowerCase().includes(searchTerm);
@@ -1933,14 +1969,14 @@
         const matchesMissing = !missingPhotoOnly || needsPhoto(item);
         const matchesTote = toteFilter === "all" || (toteFilter === "__none__" ? !(item.tote || "").trim() : toteNames(item.tote).includes(toteFilter));
         const matchesPromo = !promoFilterOnly || item.featured_at || item.promo_at;
-        const matchesHold = !holdFilterOnly || item.on_hold_at;
+        const matchesHold = !holdFilterOnly || (item.on_hold_at && !isRepair(item));
+        const matchesRepair = repairFilter === "all" || (isRepair(item) && (repairFilter === "any" || (item.brand || "") === repairFilter));
         const matchesPending =
           pendingFilter === "all" ||
           (pendingFilter === "any" && isPendingCheck(item)) ||
           (pendingFilter === "photo" && isPendingCheck(item) && hasPhoto(item)) ||
-          (pendingFilter === "nophoto" && isPendingCheck(item) && !hasPhoto(item)) ||
-          (pendingFilter === "disc" && holdReason(item) && holdReason(item).badge === "DISC ISSUE - ON HOLD");
-        return matchesPending && matchesSearch && matchesCategory && matchesBrand && matchesType && matchesPhoto && matchesMissing && matchesTote && matchesPromo && matchesHold;
+          (pendingFilter === "nophoto" && isPendingCheck(item) && !hasPhoto(item));
+        return matchesRepair && matchesPending && matchesSearch && matchesCategory && matchesBrand && matchesType && matchesPhoto && matchesMissing && matchesTote && matchesPromo && matchesHold;
       });
 
       renderInventoryLetterBar(preLetter);
@@ -1979,7 +2015,7 @@
         const badges = [
           item.featured_at ? `<span class="badge badge-new">NEW</span>` : "",
           item.promo_at ? `<span class="badge badge-sale">SALE</span>` : "",
-          item.on_hold_at ? `<span class="badge badge-hold${holdReason(item).badge === "DISC ISSUE - ON HOLD" ? " badge-disc" : ""}">${holdReason(item).badge}</span>` : "",
+          item.on_hold_at ? `<span class="badge ${isRepair(item) ? "badge-repair" : "badge-hold"}">${holdReason(item).badge}</span>` : "",
         ].join(" ");
         const conditionTag = [item.condition_grade, item.completeness].filter(Boolean).join(", ");
         const costLabel =
@@ -2001,7 +2037,9 @@
               <button class="btn secondary" data-action="toggle-featured" data-id="${item.id}">${item.featured_at ? "Unfeature" : "Feature as New"}</button>
               <button class="btn secondary" data-action="toggle-promo" data-id="${item.id}">${item.promo_at ? "Remove from Sale" : "Mark on Sale"}</button>
               <button class="btn secondary" data-action="toggle-price-checked" data-id="${item.id}">${item.price_checked_at ? "Clear Price-Checked" : "Mark Price Checked Today"}</button>
-              <button class="btn secondary" data-action="toggle-hold" data-id="${item.id}">${item.on_hold_at ? "Release Hold" : "Hold (Needs Repair)"}</button>
+              ${isRepair(item)
+                ? `<button class="btn" data-action="repaired" data-id="${item.id}">Repaired - back for sale</button>`
+                : `<button class="btn secondary" data-action="toggle-hold" data-id="${item.id}">${item.on_hold_at ? "Release Hold" : "Hold"}</button>${item.on_hold_at ? "" : `<button class="btn secondary" data-action="mark-repair" data-id="${item.id}">Needs Repair</button>`}`}
             </div>
             <div class="btn-row">
               <span class="meta" style="align-self:center;">Post to:</span>
@@ -2042,6 +2080,12 @@
       listEl.querySelectorAll('[data-action="toggle-hold"]').forEach((btn) =>
         btn.addEventListener("click", () => toggleFlag(btn.dataset.id, "on_hold_at"))
       );
+      listEl.querySelectorAll('[data-action="mark-repair"]').forEach((btn) =>
+        btn.addEventListener("click", () => markNeedsRepair(btn.dataset.id))
+      );
+      listEl.querySelectorAll('[data-action="repaired"]').forEach((btn) =>
+        btn.addEventListener("click", () => markRepaired(btn.dataset.id))
+      );
       listEl.querySelectorAll('[data-action="post-ebay"]').forEach((btn) =>
         btn.addEventListener("click", () => copyListingAndOpen(btn.dataset.id, "https://www.ebay.com/sl/sell"))
       );
@@ -2067,6 +2111,39 @@
         alert("Couldn't copy to clipboard automatically — use \"Generate Listing Text\" above to copy it manually.");
       }
       window.open(url, "_blank");
+    }
+
+    // "Needs Repair": holds the item (so it stays off the store) and writes the repair marker in the private notes, so it
+    // lands under the Needs repair filter instead of the plain On Hold list.
+    async function markNeedsRepair(id) {
+      const item = items.find((i) => i.id === id);
+      if (!item) return;
+      const note = "**Condition issue on disc**: held for repair if worth it, otherwise donate.";
+      const update = { on_hold_at: new Date().toISOString(), internal_notes: `${item.internal_notes ? item.internal_notes.trim() + " " : ""}${note}` };
+      const { error } = await supabaseClient.from("items").update(update).eq("id", id);
+      if (error) { alert(`Couldn't update: ${error.message}`); return; }
+      await loadItems();
+    }
+
+    // "Repaired - back for sale": removes the repair marker from the public and private notes (so the disc-issue wording
+    // never shows on the store) and releases the hold. If the item is also waiting on a price check (PENDING-CHECK) it stays
+    // held for that and just stops counting as a repair.
+    async function markRepaired(id) {
+      const item = items.find((i) => i.id === id);
+      if (!item) return;
+      const pending = (item.internal_notes || "").includes("PENDING-CHECK");
+      if (!confirm(`Mark "${item.title}" as repaired?${pending ? "\n\nIt is still waiting on its price check, so it stays on hold for that." : "\n\nIt will go back on sale."}`)) return;
+      const cleanCond = (item.condition_notes || "")
+        .replace(/Needs manual \+ condition issues? on (the )?disc -- held pending disc resurfacing and manual\.?/i, "Needs manual.")
+        .replace(/Condition issues? on (the )?disc -- held pending disc resurfacing\.?/i, "")
+        .trim();
+      const cleanNotes = (item.internal_notes || "").replace(/\*\*Condition issues? on (the )?disc\*\*[^.]*\.?/i, "").replace(/\s+/g, " ").trim();
+      const stamp = `Repaired ${new Date().toISOString().slice(0, 10)}.`;
+      const update = { condition_notes: cleanCond || null, internal_notes: `${cleanNotes ? cleanNotes + " " : ""}${stamp}` };
+      if (!pending) update.on_hold_at = null;
+      const { error } = await supabaseClient.from("items").update(update).eq("id", id);
+      if (error) { alert(`Couldn't update: ${error.message}`); return; }
+      await loadItems();
     }
 
     async function toggleFlag(id, column) {
