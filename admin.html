@@ -130,6 +130,22 @@
     <div class="section">
       <h2>Customers (<span id="customerCount">0</span>)</h2>
       <p class="hint">Built from the order list: orders from the same email (or the same name, when there's no email) are added up. <strong>Spent</strong> counts orders you've marked <em>Fulfilled</em> (paid and done); <strong>Open</strong> is New/Contacted orders still waiting. Cancelled orders are ignored. Sales made outside the site (Kijiji, in person) only show here if they came in as an order.</p>
+      <details id="offlineSaleBox" style="margin:0.5rem 0 0.9rem;">
+        <summary style="cursor:pointer;font-weight:700;">+ Log an offline sale (Kijiji, eBay, Facebook, in person...)</summary>
+        <p class="hint">Records the sale, takes the item out of stock and adds the buyer to this list. Name and contact are optional: a one-time Kijiji buyer can be just "Kijiji buyer".</p>
+        <div style="display:flex;flex-wrap:wrap;gap:0.75rem;">
+          <div><label for="osName">Customer name</label><input type="text" id="osName" style="max-width:14rem;" /></div>
+          <div><label for="osContact">Email or phone</label><input type="text" id="osContact" style="max-width:14rem;" /></div>
+          <div><label for="osChannel">Where did it sell?</label>
+            <select id="osChannel" style="max-width:14rem;"><option>Kijiji</option><option>Facebook Marketplace</option><option>eBay</option><option>In Person</option><option>Other</option></select></div>
+        </div>
+        <label for="osSearch">Find the item (type part of the title)</label>
+        <input type="search" id="osSearch" placeholder="e.g. mario bros 3" style="max-width:26rem;" />
+        <div id="osMatches"></div>
+        <div id="osLines"></div>
+        <p class="error-text" id="osError" hidden></p>
+        <button type="button" class="btn" id="osRecordBtn">Record sale &amp; remove from inventory</button>
+      </details>
       <input type="search" id="customerSearch" placeholder="Search customers by name or email..." style="max-width:22rem;" />
       <p class="hint" id="customerSummary" style="font-weight:700;margin-top:0.6rem;"></p>
       <div id="customerList"></div>
@@ -1296,6 +1312,7 @@
         return;
       }
       sales = data;
+      if (typeof refreshCustomers === "function") refreshCustomers();
     }
 
     async function loadOrders() {
@@ -1309,6 +1326,46 @@
         return;
       }
       renderOrderList(data);
+    }
+
+    // Saves one sale row. When a customer is given it also stores them; if the customer columns haven't been added yet
+    // (sales_customer_setup.sql), the sale is still recorded without them and the owner is told once.
+    let customerColumnWarned = false;
+    async function insertSale(row, who) {
+      const name = ((who && who.name) || "").trim(), contact = ((who && who.contact) || "").trim();
+      if (name || contact) {
+        const res = await supabaseClient.from("sales").insert({ ...row, customer_name: name || null, customer_contact: contact || null });
+        if (!res.error) return res;
+        if (!/customer_(name|contact)|schema cache|column/i.test(res.error.message)) return res;
+        if (!customerColumnWarned) {
+          customerColumnWarned = true;
+          alert("The sale is being recorded, but the customer can't be saved yet: run sales_customer_setup.sql in the Supabase SQL Editor once (one-time setup), then reload this page.");
+        }
+      }
+      return await supabaseClient.from("sales").insert(row);
+    }
+
+    // Records each planned line as a sale (one sales row) and takes the quantity out of stock; the last unit marks the listing sold.
+    async function applyPlan(plan, channel, who) {
+      const done = [];
+      for (const x of plan) {
+        const { error: saleError } = await insertSale({
+          item_id: x.item.id, title: x.item.title, category: x.item.category, quantity: x.qty,
+          price_each: x.price, cost_basis_each: x.item.cost_basis, channel,
+        }, who);
+        if (saleError) {
+          alert(`Couldn't record the sale of "${x.item.title}": ${saleError.message}\n\n` + (done.length ? `Already recorded before the error (do NOT redo these): ${done.join(", ")}` : "Nothing was changed."));
+          return { ok: false, done };
+        }
+        const remaining = Number(x.item.quantity) - x.qty;
+        const updates = remaining > 0 ? { quantity: remaining } : { quantity: 0, status: "sold" };
+        const { error: itemError } = await supabaseClient.from("items").update(updates).eq("id", x.item.id);
+        if (itemError) {
+          alert(`Sale recorded, but couldn't update stock for "${x.item.title}": ${itemError.message}. Fix that listing by hand.`);
+        }
+        done.push(x.item.title);
+      }
+      return { ok: true, done };
     }
 
     // Turns a paid/fulfilled website order into real sales: one sales row per line (at the price actually charged), the sold
@@ -1344,25 +1401,8 @@
         (notes.length ? "\n\nNotes:\n" + notes.join("\n") : "");
       if (!confirm(msg)) return false;
 
-      const done = [];
-      for (const x of plan) {
-        const { error: saleError } = await supabaseClient.from("sales").insert({
-          item_id: x.item.id, title: x.item.title, category: x.item.category, quantity: x.qty,
-          price_each: x.price, cost_basis_each: x.item.cost_basis, channel: "Website order",
-        });
-        if (saleError) {
-          alert(`Couldn't record the sale of "${x.item.title}": ${saleError.message}\n\n` + (done.length ? `Already recorded before the error (do NOT redo these): ${done.join(", ")}` : "Nothing was changed."));
-          await loadSales(); await loadItems();
-          return false;
-        }
-        const remaining = Number(x.item.quantity) - x.qty;
-        const updates = remaining > 0 ? { quantity: remaining } : { quantity: 0, status: "sold" };
-        const { error: itemError } = await supabaseClient.from("items").update(updates).eq("id", x.item.id);
-        if (itemError) {
-          alert(`Sale recorded, but couldn't update stock for "${x.item.title}": ${itemError.message}. Fix that listing by hand.`);
-        }
-        done.push(x.item.title);
-      }
+      const res = await applyPlan(plan, "Website order", { name: order.customer_name, contact: order.customer_contact });
+      if (!res.ok) { await loadSales(); await loadItems(); return false; }
       const { error: markError } = await supabaseClient.from("orders").update({ inventory_removed_at: new Date().toISOString(), status: "fulfilled" }).eq("id", order.id);
       if (markError) alert(`Sales recorded, but couldn't mark the order: ${markError.message}. Do NOT record it again.`);
       await loadSales();
@@ -1371,28 +1411,42 @@
       return true;
     }
 
-    // ---- Customers: lifetime spend per customer, worked out from the orders ----
+    // ---- Customers: lifetime spend per customer, worked out from the orders plus any offline sales logged with a customer ----
     let customerRows = [];
+    let lastOrders = [];
     function buildCustomers(orders) {
-      const map = new Map();
+      const events = [];
       orders.forEach((o) => {
         if (o.status === "cancelled") return;
-        const contact = (o.customer_contact || "").trim();
-        const name = (o.customer_name || "").trim();
-        const key = (contact || name).toLowerCase();
+        events.push({ name: (o.customer_name || "").trim(), contact: (o.customer_contact || "").trim(), when: new Date(o.created_at), total: Number(o.total) || 0,
+          done: o.status === "fulfilled", saved: Number(o.discount_total) || 0, entry: o });
+      });
+      // offline sales (Kijiji, eBay, in person...). Sales that came from a website order are skipped: the order already counts them.
+      (typeof sales !== "undefined" ? sales : []).forEach((x) => {
+        if (x.channel === "Website order") return;
+        const name = (x.customer_name || "").trim(), contact = (x.customer_contact || "").trim();
+        if (!name && !contact) return;
+        events.push({ name, contact, when: new Date(x.sold_at), total: (Number(x.quantity) || 0) * (Number(x.price_each) || 0), done: true, saved: 0,
+          entry: { created_at: x.sold_at, total: (Number(x.quantity) || 0) * (Number(x.price_each) || 0), status: "fulfilled", channel: x.channel, items: [{ qty: x.quantity, title: x.title }] } });
+      });
+      const map = new Map();
+      events.forEach((e) => {
+        const key = (e.contact || e.name).toLowerCase();
         if (!key) return;
         if (!map.has(key)) map.set(key, { key, name: "", contact: "", orders: [], spent: 0, open: 0, fulfilledCount: 0, saved: 0, last: null });
         const c = map.get(key);
-        const when = new Date(o.created_at);
-        if (!c.last || when > c.last) { c.last = when; if (name) c.name = name; if (contact) c.contact = contact; }
-        if (!c.name && name) c.name = name;
-        if (!c.contact && contact) c.contact = contact;
-        c.orders.push(o);
-        c.saved += Number(o.discount_total) || 0;
-        if (o.status === "fulfilled") { c.spent += Number(o.total) || 0; c.fulfilledCount += 1; }
-        else c.open += Number(o.total) || 0;
+        if (!c.last || e.when > c.last) { c.last = e.when; if (e.name) c.name = e.name; if (e.contact) c.contact = e.contact; }
+        if (!c.name && e.name) c.name = e.name;
+        if (!c.contact && e.contact) c.contact = e.contact;
+        c.orders.push(e.entry);
+        c.saved += e.saved;
+        if (e.done) { c.spent += e.total; c.fulfilledCount += 1; } else c.open += e.total;
       });
       return [...map.values()].sort((a, b) => b.spent - a.spent || b.open - a.open || b.last - a.last);
+    }
+    function refreshCustomers() {
+      customerRows = buildCustomers(lastOrders);
+      renderCustomers();
     }
 
     function renderCustomers() {
@@ -1410,7 +1464,7 @@
         const lines = c.orders
           .slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
           .map((o) => `<div class="meta">${new Date(o.created_at).toLocaleDateString()} &mdash; ${money(Number(o.total))} <em>(${escapeHtml(o.status || "new")})</em>` +
-            `${o.promo_code ? ` &mdash; code ${escapeHtml(o.promo_code)}` : ""}<br>${(o.items || []).map((i) => `${i.qty}x ${escapeHtml(i.title)}`).join(", ")}</div>`).join("");
+            `${o.promo_code ? ` &mdash; code ${escapeHtml(o.promo_code)}` : ""}${o.channel ? ` &mdash; ${escapeHtml(o.channel)}` : ""}<br>${(o.items || []).map((i) => `${i.qty}x ${escapeHtml(i.title)}`).join(", ")}</div>`).join("");
         return `<details class="item-row" style="display:block;">
           <summary style="cursor:pointer;font-weight:800;">${escapeHtml(c.name || c.contact || "(no name)")}
             <span class="meta" style="font-weight:700;">&mdash; Spent ${money(c.spent)}${c.open > 0 ? `, Open ${money(c.open)}` : ""} &middot; ${c.orders.length} order${c.orders.length === 1 ? "" : "s"}${c.fulfilledCount >= 2 ? " &middot; repeat customer" : ""} &middot; last ${c.last.toLocaleDateString()}</span></summary>
@@ -1421,9 +1475,74 @@
     }
     document.getElementById("customerSearch").addEventListener("input", renderCustomers);
 
+    // ---- Log an offline sale for a customer ----
+    let osLines = [];
+    function osRender() {
+      const el = document.getElementById("osLines");
+      if (!osLines.length) { el.innerHTML = ""; return; }
+      const total = osLines.reduce((t, l) => t + l.qty * l.price, 0);
+      el.innerHTML = osLines.map((l, i) => `<div class="btn-row" style="align-items:center;margin:0.3rem 0;">
+          <span style="flex:1;min-width:12rem;font-weight:700;">${escapeHtml(l.item.title)} <span class="meta">(${Number(l.item.quantity)} in stock)</span></span>
+          <label style="margin:0;">Qty <input type="number" min="1" max="${Number(l.item.quantity)}" step="1" value="${l.qty}" data-os-qty="${i}" style="width:5rem;display:inline-block;" /></label>
+          <label style="margin:0;">Price each $ <input type="number" min="0" step="0.01" value="${l.price.toFixed(2)}" data-os-price="${i}" style="width:7rem;display:inline-block;" /></label>
+          <button type="button" class="btn danger" data-os-remove="${i}">Remove</button></div>`).join("") + `<p class="hint" style="font-weight:700;">Total ${money(total)}</p>`;
+    }
+    document.getElementById("osLines").addEventListener("input", (e) => {
+      const q = e.target.dataset.osQty, pr = e.target.dataset.osPrice;
+      if (q !== undefined) osLines[Number(q)].qty = Math.max(1, Math.round(Number(e.target.value)) || 1);
+      if (pr !== undefined) osLines[Number(pr)].price = Math.max(0, Number(e.target.value) || 0);
+    });
+    document.getElementById("osLines").addEventListener("change", osRender);
+    document.getElementById("osLines").addEventListener("click", (e) => {
+      const r = e.target.dataset.osRemove;
+      if (r !== undefined) { osLines.splice(Number(r), 1); osRender(); }
+    });
+    document.getElementById("osSearch").addEventListener("input", (e) => {
+      const words = e.target.value.toLowerCase().split(/\s+/).filter(Boolean);
+      const box = document.getElementById("osMatches");
+      if (!words.length) { box.innerHTML = ""; return; }
+      const hits = items.filter((i) => i.status !== "sold" && Number(i.quantity) > 0 && words.every((w) => (i.title || "").toLowerCase().includes(w))).slice(0, 8);
+      box.innerHTML = hits.length
+        ? hits.map((i) => `<button type="button" class="btn secondary" style="margin:0.15rem 0.3rem 0.15rem 0;" data-os-add="${i.id}">${escapeHtml(i.title)} &mdash; ${money(Number(i.asking_price))} (${Number(i.quantity)})</button>`).join("")
+        : `<p class="hint">Nothing in stock matches that.</p>`;
+    });
+    document.getElementById("osMatches").addEventListener("click", (e) => {
+      const id = e.target.dataset.osAdd;
+      if (!id) return;
+      const item = items.find((i) => String(i.id) === id);
+      if (!item) return;
+      const existing = osLines.find((l) => l.item.id === item.id);
+      if (existing) existing.qty = Math.min(existing.qty + 1, Number(item.quantity));
+      else osLines.push({ item, qty: 1, price: Number(item.asking_price) || 0 });
+      document.getElementById("osSearch").value = "";
+      document.getElementById("osMatches").innerHTML = "";
+      osRender();
+    });
+    document.getElementById("osRecordBtn").addEventListener("click", async () => {
+      const err = document.getElementById("osError");
+      err.hidden = true;
+      if (!osLines.length) { err.textContent = "Search for the item sold and click it to add it first."; err.hidden = false; return; }
+      const name = document.getElementById("osName").value.trim();
+      const contact = document.getElementById("osContact").value.trim();
+      const channel = document.getElementById("osChannel").value;
+      const plan = osLines.map((l) => ({ item: l.item, qty: Math.min(l.qty, Number(l.item.quantity)), price: l.price }));
+      const total = plan.reduce((t, x) => t + x.qty * x.price, 0);
+      const msg = `Record this sale via ${channel}${name || contact ? ` for ${name || contact}` : ""}?\n\n` +
+        plan.map((x) => `${x.qty} x ${x.item.title} @ $${x.price.toFixed(2)}` + (Number(x.item.quantity) - x.qty > 0 ? ` (${Number(x.item.quantity) - x.qty} stay in stock)` : " (listing marked sold)")).join("\n") +
+        `\n\nTotal $${total.toFixed(2)}`;
+      if (!confirm(msg)) return;
+      const res = await applyPlan(plan, channel, { name, contact });
+      await loadSales();
+      await loadItems();
+      if (!res.ok) return;
+      osLines = []; osRender();
+      document.getElementById("osName").value = ""; document.getElementById("osContact").value = "";
+      document.getElementById("offlineSaleBox").open = false;
+    });
+
     function renderOrderList(orders) {
-      customerRows = buildCustomers(orders);
-      renderCustomers();
+      lastOrders = orders;
+      refreshCustomers();
       document.getElementById("orderCount").textContent = orders.length;
       const listEl = document.getElementById("orderList");
       listEl.innerHTML = "";
@@ -2964,6 +3083,9 @@
 
       const channel = prompt("Where did this sell? (e.g. Kijiji, Facebook Marketplace, In Person)", "Kijiji");
       if (channel === null) return;
+      const whoText = prompt("Customer name, email or phone (optional: adds them to the Customers list; leave blank to skip):", "");
+      if (whoText === null) return;
+      const who = /@|\d{3}/.test(whoText) ? { name: "", contact: whoText.trim() } : { name: whoText.trim(), contact: "" };
 
       const remaining = maxQty - qty;
       const confirmMsg =
@@ -2973,7 +3095,7 @@
         (remaining > 0 ? `${remaining} will remain in stock.` : `This will mark the listing as sold.`);
       if (!confirm(confirmMsg)) return;
 
-      const { error: saleError } = await supabaseClient.from("sales").insert({
+      const { error: saleError } = await insertSale({
         item_id: item.id,
         title: item.title,
         category: item.category,
@@ -2981,7 +3103,7 @@
         price_each: price,
         cost_basis_each: item.cost_basis,
         channel: channel.trim() || null,
-      });
+      }, who);
       if (saleError) {
         alert(`Couldn't record sale: ${saleError.message}`);
         return;
