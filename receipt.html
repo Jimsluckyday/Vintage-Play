@@ -73,11 +73,16 @@
     .fine { font-size: 7pt; color: var(--ink-soft); text-align: center; margin-top: 0.08in; line-height: 1.35; }
     .sample-flag { text-align: center; font-weight: 800; color: var(--brick); font-size: 8pt; margin-bottom: 0.05in; }
 
+    .viewbar { background: #fff; border-bottom: 1px solid #bbb; padding: 0.7rem 1rem; display: flex; gap: 0.7rem; align-items: center; flex-wrap: wrap; }
+    .viewbar p { margin: 0; font-size: 0.85rem; color: var(--ink-soft); }
+    body.view .panel { display: none; }
+    body.view .page { margin: 0.4in auto 0.2in; }
+
     @page { size: letter; margin: 0; }
     @media print {
       body { background: #fff; }
-      .panel { display: none; }
-      .page { margin: 0; box-shadow: none; }
+      .panel, .viewbar { display: none; }
+      .page { margin: 0; box-shadow: none; zoom: 1 !important; }
       .receipt { border-color: transparent; }
     }
   </style>
@@ -122,10 +127,16 @@
       <button class="btn print" type="button" id="emailBtn">Email receipt to customer</button>
       <button class="btn" type="button" id="pdfBtn">Download PDF</button>
       <button class="btn light" type="button" onclick="window.print()">Print</button>
-      <span class="hint" style="margin:0;">The email carries the same PDF (with the scannable QR code) as an attachment.</span>
+      <span class="hint" style="margin:0;">The email has a button that opens an online copy of the receipt, with the scannable QR code and a Save as PDF button.</span>
     </div>
     <p class="hint" id="emailStatus" style="font-weight:800;"></p>
     <p class="hint" id="srcHint"></p>
+  </div>
+
+  <div class="viewbar" id="viewBar" hidden>
+    <button class="btn" type="button" id="pdfBtn2">Save as PDF</button>
+    <button class="btn light" type="button" id="printBtn2">Print</button>
+    <p>Your receipt from Vintage Play Collectables. Scan the QR code at the bottom with your phone camera to shop with your coupon.</p>
   </div>
 
   <div class="page">
@@ -206,7 +217,7 @@
   }
 
   // The same receipt as an email: plain tables with inline styles (email programs ignore everything else).
-  function emailHtml() {
+  function emailHtml(viewLink) {
     const { lines, gross, disc, tax, total } = calc();
     const td = "padding:6px 4px;border-bottom:1px solid #ddd2c2;";
     const th = "font-size:11px;text-transform:uppercase;color:#6b5a48;border-bottom:2px solid #2e2118;padding:4px;";
@@ -233,6 +244,7 @@
       <div style="background:#241a12;padding:16px 20px;"><span style="font-size:20px;font-weight:bold;color:#e2a63b;letter-spacing:1px;">VINTAGE PLAY COLLECTABLES</span><span style="float:right;font-size:18px;font-weight:bold;color:#e2a63b;">RECEIPT</span></div>
       <div style="padding:16px 20px;">
         <div style="font-size:13px;line-height:1.5;"><b>Receipt ${esc($("fNo").value)}</b> &middot; ${esc(longDate($("fDate").value))}${name ? `<br />For: ${esc(name)}` : ""}<br />Brampton, Ontario &middot; www.vintageplay.ca</div>
+        ${viewLink ? `<div style="margin-top:14px;"><a href="${viewLink}" style="background:#c2452f;color:#ffffff;text-decoration:none;font-weight:bold;padding:9px 18px;border-radius:6px;display:inline-block;">Open your receipt online (QR code, save as PDF)</a></div>` : ""}
         <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:14px;">
           <tr><th style="text-align:left;${th}">Item</th><th style="${th}">Qty</th><th style="text-align:right;${th}">Price</th><th style="text-align:right;${th}">Amount</th></tr>
           ${rows}${tot}
@@ -364,25 +376,62 @@
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) { st.textContent = "Type the customer's email address first."; return; }
     const c = calc();
     if (!c.lines.length) { st.textContent = "Add at least one item first."; return; }
-    if (!confirm(`Send receipt ${$("fNo").value} (${money(c.total)}) with the PDF attached to ${to}?`)) return;
+    if (!confirm(`Send receipt ${$("fNo").value} (${money(c.total)}) to ${to}? The email includes a link to an online copy of the receipt (with the QR code).`)) return;
     $("emailBtn").disabled = true; st.style.color = "#6b5a48"; st.textContent = "Sending...";
     try {
-      const pdfB64 = buildPdf().output("datauristring").split("base64,")[1];
-      const params = {
+      // 1. Save the receipt so the customer's link can show it (no names/contacts beyond what is printed on it).
+      const payload = {
+        no: $("fNo").value, date: $("fDate").value, name: $("fName").value.trim(), lines: c.lines, disc: c.disc, hst: $("fHst").checked,
+        pay: $("fPay").value, note: $("fNote").value.trim(),
+        coupon: { on: $("fCoupon").checked, code: $("fCode").value.trim().toUpperCase(), pct: Number($("fPct").value) || 10, until: $("fUntil").value },
+      };
+      const saved = await supabaseClient.from("receipts").insert({ receipt_no: payload.no, data: payload }).select("id").single();
+      if (saved.error) {
+        const missing = /receipts|relation|schema cache/i.test(saved.error.message);
+        throw new Error(missing ? "the receipts table isn't set up yet: run receipts_setup.sql in the Supabase SQL Editor once." : "couldn't save the online copy (" + saved.error.message + "). Log in on the admin page in this same browser first, then try again.");
+      }
+      const link = `${SITE}/receipt.html?r=${saved.data.id}`;
+      // 2. Send the email with that link.
+      await emailjs.send(EMAILJS_SERVICE_ID, RECEIPT_TEMPLATE_ID, {
         to_email: to,
         subject: `Your receipt from Vintage Play Collectables (${$("fNo").value})`,
-        message_html: emailHtml(),
+        message_html: emailHtml(link),
         name: "Vintage Play Collectables",
-        receipt_pdf: "data:application/pdf;base64," + pdfB64,
-      };
-      // EmailJS's free plan caps one send at about 50 KB in total; stop with a clear message instead of a vague failure.
-      const size = JSON.stringify(params).length;
-      if (size > 49000) throw new Error(`this receipt is too big to attach (${Math.round(size / 1000)} KB, limit about 49 KB). Use Download PDF and send it yourself.`);
-      await emailjs.send(EMAILJS_SERVICE_ID, RECEIPT_TEMPLATE_ID, params);
+      });
       st.style.color = "#2f7d78"; st.textContent = `Sent to ${to}. A copy also shows in your Yahoo Sent folder.`;
     } catch (e) {
-      st.style.color = "#c2452f"; st.textContent = `Couldn't send: ${(e && (e.text || e.message)) || "unknown error"}. You can still use Download PDF.`;
+      st.style.color = "#c2452f"; st.textContent = `Couldn't send: ${(e && (e.text || e.message)) || "unknown error"}. You can still use Download PDF and send it yourself.`;
     } finally { $("emailBtn").disabled = false; }
+  }
+
+  // Customer view: receipt.html?r=<id> shows a saved receipt read-only (fetched through a database function that only
+  // answers for the exact id in the link), with Save as PDF / Print and the scannable QR code.
+  async function startSharedView(id) {
+    document.body.classList.add("view");
+    $("viewBar").hidden = false;
+    $("pdfBtn2").addEventListener("click", () => buildPdf().save(pdfFileName()));
+    $("printBtn2").addEventListener("click", () => window.print());
+    let data = null;
+    try {
+      const res = await supabaseClient.rpc("get_receipt", { p_id: id });
+      data = res.error ? null : res.data;
+    } catch (e) { data = null; }
+    if (!data) {
+      $("oLines").innerHTML = `<tr><td colspan="4">This receipt link isn't valid. Please contact us at info@vintageplay.ca.</td></tr>`;
+      $("pdfBtn2").disabled = true;
+      return;
+    }
+    $("fNo").value = data.no || ""; $("fDate").value = data.date || ""; $("fName").value = data.name || "";
+    $("fPay").value = data.pay || ""; $("fDisc").value = data.disc ? Number(data.disc).toFixed(2) : "";
+    $("fHst").checked = !!data.hst; $("fNote").value = data.note || "";
+    (data.lines || []).forEach((l) => addLine(l.desc, l.qty, l.price));
+    const cp = data.coupon || {};
+    $("fCoupon").checked = !!cp.on; $("fCode").value = cp.code || ""; $("fPct").value = cp.pct || 10; $("fUntil").value = cp.until || "";
+    document.title = `Receipt ${data.no || ""} - Vintage Play Collectables`;
+    render();
+    // fit the letter-size page to a phone screen
+    const fit = () => { const sc = Math.min(1, (window.innerWidth - 16) / 816); document.querySelector(".page").style.zoom = sc; };
+    fit(); window.addEventListener("resize", fit);
   }
 
   function render() {
@@ -435,6 +484,8 @@
 
   // ---- start up: fill from an admin order if one was handed over, otherwise a fresh blank receipt ----
   (function init() {
+    const sharedId = new URLSearchParams(location.search).get("r");
+    if (sharedId) { startSharedView(sharedId); return; }
     const today = ymd(new Date());
     let order = null;
     if (new URLSearchParams(location.search).get("from") === "order") {
