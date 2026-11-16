@@ -1,6 +1,6 @@
 // Bump this by 1 every time this file (or admin.html/index.html) is redeployed.
 // Lets the page detect and warn if the browser is running a stale cached copy.
-const LOCAL_VERSION = "126";
+const LOCAL_VERSION = "127";
 
 // Public site URL — used in the Kijiji/FB listing generator to point buyers back to the full catalog.
 const SITE_URL = "https://www.vintageplay.ca";
@@ -26,6 +26,9 @@ const LISTING_SHIPPING_NOTE = "Shipping available via Canada Post for buyers out
 const EMAILJS_PUBLIC_KEY = "Wi-0Gg95ueHU1Puti";
 const EMAILJS_SERVICE_ID = "service_s37rjpc";
 const EMAILJS_TEMPLATE_ID = "template_xu2hlwo";
+// Second EmailJS template, used only by receipt.html to email a receipt to a customer.
+// Paste its Template ID here once it's created in the EmailJS dashboard (blank = the Email button says it isn't set up yet).
+const RECEIPT_TEMPLATE_ID = "";
 
 // Where the cart's "Pay with PayPal" button sends buyers — paypal.me/<this>
 const PAYPAL_ME_HANDLE = "vintageplay";

@@ -7,6 +7,9 @@
   <title>Customer receipt</title>
   <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script src="/config.js"></script>
   <style>
     /* Printable customer receipt (letter page, receipt on the top half so the coupon strip can be cut off the bottom).
        Open it from the admin page (Orders > Receipt) to fill itself in from an order, or open it directly and type the sale in.
@@ -86,6 +89,7 @@
       <label>Date<input id="fDate" type="date" /></label>
       <label>Customer name<input id="fName" placeholder="Name on the receipt" /></label>
       <label>Contact (optional)<input id="fContact" placeholder="Email or phone" /></label>
+      <label>Customer's email (to send it)<input id="fEmail" type="email" placeholder="name@example.com" /></label>
       <label>Paid by
         <select id="fPay">
           <option>Cash</option><option>e-Transfer</option><option>PayPal</option><option>Bitcoin</option><option>Other</option><option value="">(leave off)</option>
@@ -114,9 +118,11 @@
     </div>
 
     <div class="row">
-      <button class="btn print" type="button" onclick="window.print()">Print or save as PDF</button>
-      <span class="hint" style="margin:0;">Paper: Letter, margins: None. The receipt prints on the top of the page; cut along the dashed line to hand over the coupon separately.</span>
+      <button class="btn print" type="button" id="emailBtn">Email receipt to customer</button>
+      <button class="btn" type="button" onclick="window.print()">Print or save as PDF</button>
+      <span class="hint" style="margin:0;">No printer needed: in the print window choose <strong>Save as PDF</strong>. Paper: Letter, margins: None.</span>
     </div>
+    <p class="hint" id="emailStatus" style="font-weight:800;"></p>
     <p class="hint" id="srcHint"></p>
   </div>
 
@@ -187,6 +193,77 @@
       localStorage.setItem("vp_receipt_counter", JSON.stringify({ day, n }));
     } catch (e) { /* private mode: just use 1 */ }
     return `R-${day}-${n}`;
+  }
+
+  function calc() {
+    const lines = readLines();
+    const gross = lines.reduce((s, l) => s + l.qty * l.price, 0);
+    const disc = Math.min(Math.max(Number($("fDisc").value) || 0, 0), gross);
+    const tax = $("fHst").checked ? Math.round((gross - disc) * HST * 100) / 100 : 0;
+    return { lines, gross, disc, tax, total: gross - disc + tax };
+  }
+
+  // The same receipt as an email: plain tables with inline styles (email programs ignore everything else).
+  function emailHtml() {
+    const { lines, gross, disc, tax, total } = calc();
+    const td = "padding:6px 4px;border-bottom:1px solid #ddd2c2;";
+    const th = "font-size:11px;text-transform:uppercase;color:#6b5a48;border-bottom:2px solid #2e2118;padding:4px;";
+    const rows = lines.map((l) => `<tr><td style="${td}">${esc(l.desc)}</td><td style="${td}text-align:center;">${l.qty}</td><td style="${td}text-align:right;">${money(l.price)}</td><td style="${td}text-align:right;">${money(l.qty * l.price)}</td></tr>`).join("");
+    const tr = (a, b, st = "") => `<tr><td colspan="3" style="text-align:right;padding:3px 4px;${st}">${a}</td><td style="text-align:right;padding:3px 4px;${st}">${b}</td></tr>`;
+    let tot = "";
+    if (disc > 0 || tax > 0) tot += tr("Subtotal", money(gross));
+    if (disc > 0) tot += tr("Discount", "&minus;" + money(disc), "color:#c2452f;");
+    if (tax > 0) tot += tr("HST (13%)", money(tax));
+    tot += tr("<b>Total (CAD)</b>", `<b>${money(total)}</b>`, "font-size:16px;");
+    const pay = $("fPay").value, note = $("fNote").value.trim(), name = $("fName").value.trim();
+    const code = $("fCode").value.trim().toUpperCase();
+    const pct = Math.round(Number($("fPct").value)) || 10;
+    const until = longDate($("fUntil").value);
+    const coupon = $("fCoupon").checked && code && code !== "THX-SAMPLE" ? `
+      <div style="margin-top:22px;border:2px dashed #c2452f;border-radius:10px;background:#ffffff;padding:16px;text-align:center;">
+        <div style="font-size:13px;font-weight:bold;">Thanks for shopping with us!</div>
+        <div style="font-size:28px;font-weight:bold;color:#c2452f;margin:4px 0;">${pct}% OFF your next order</div>
+        <div style="display:inline-block;font-family:'Courier New',monospace;font-size:22px;font-weight:bold;letter-spacing:2px;background:#241a12;color:#e2a63b;padding:6px 16px;border-radius:6px;">${esc(code)}</div>
+        <div style="margin-top:12px;"><a href="${SITE}/?code=${encodeURIComponent(code)}" style="background:#2f7d78;color:#ffffff;text-decoration:none;font-weight:bold;padding:9px 18px;border-radius:6px;display:inline-block;">Shop now - code applies for you</a></div>
+        <div style="font-size:11px;color:#6b5a48;margin-top:10px;">Or type the code in the cart at vintageplay.ca. One use per code${until ? `, good until ${esc(until)}` : ""}. Can't be combined with other sales (the best discount applies).</div>
+      </div>` : "";
+    return `<div style="max-width:620px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#2e2118;background:#fffaf0;border:1px solid #cfc6b8;">
+      <div style="background:#241a12;padding:16px 20px;"><span style="font-size:20px;font-weight:bold;color:#e2a63b;letter-spacing:1px;">VINTAGE PLAY COLLECTABLES</span><span style="float:right;font-size:18px;font-weight:bold;color:#e2a63b;">RECEIPT</span></div>
+      <div style="padding:16px 20px;">
+        <div style="font-size:13px;line-height:1.5;"><b>Receipt ${esc($("fNo").value)}</b> &middot; ${esc(longDate($("fDate").value))}${name ? `<br />For: ${esc(name)}` : ""}<br />Brampton, Ontario &middot; www.vintageplay.ca</div>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:14px;">
+          <tr><th style="text-align:left;${th}">Item</th><th style="${th}">Qty</th><th style="text-align:right;${th}">Price</th><th style="text-align:right;${th}">Amount</th></tr>
+          ${rows}${tot}
+        </table>
+        ${pay ? `<div style="font-size:13px;margin-top:10px;"><b>Paid by:</b> ${esc(pay)}</div>` : ""}
+        ${note ? `<div style="font-size:13px;color:#6b5a48;margin-top:6px;white-space:pre-wrap;">${esc(note)}</div>` : ""}
+        ${coupon}
+      </div>
+      <div style="background:#2f7d78;color:#ffffff;text-align:center;font-weight:bold;font-size:14px;padding:10px;">Thank you for supporting a small shop!</div>
+    </div>`;
+  }
+
+  async function sendEmail() {
+    const st = $("emailStatus");
+    const to = $("fEmail").value.trim();
+    st.style.color = "#c2452f";
+    if (typeof RECEIPT_TEMPLATE_ID === "undefined" || !RECEIPT_TEMPLATE_ID) { st.textContent = "Emailing isn't switched on yet: the receipt email template ID hasn't been added to config.js."; return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) { st.textContent = "Type the customer's email address first."; return; }
+    const c = calc();
+    if (!c.lines.length) { st.textContent = "Add at least one item first."; return; }
+    if (!confirm(`Send receipt ${$("fNo").value} (${money(c.total)}) to ${to}?`)) return;
+    $("emailBtn").disabled = true; st.style.color = "#6b5a48"; st.textContent = "Sending...";
+    try {
+      await emailjs.send(EMAILJS_SERVICE_ID, RECEIPT_TEMPLATE_ID, {
+        to_email: to,
+        subject: `Your receipt from Vintage Play Collectables (${$("fNo").value})`,
+        message_html: emailHtml(),
+        name: "Vintage Play Collectables",
+      });
+      st.style.color = "#2f7d78"; st.textContent = `Sent to ${to}. A copy also shows in your Yahoo Sent folder.`;
+    } catch (e) {
+      st.style.color = "#c2452f"; st.textContent = `Couldn't send: ${(e && (e.text || e.message)) || "unknown error"}. You can still use Save as PDF.`;
+    } finally { $("emailBtn").disabled = false; }
   }
 
   function render() {
@@ -265,6 +342,10 @@
     if (params.get("until")) $("fUntil").value = params.get("until");
     document.querySelectorAll(".panel input, .panel select").forEach((el) => { el.addEventListener("input", render); el.addEventListener("change", render); });
     $("addLine").addEventListener("click", () => { addLine(); render(); });
+    $("emailBtn").addEventListener("click", sendEmail);
+    try { emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY }); } catch (e) { /* email stays unavailable */ }
+    $("fContact").addEventListener("input", () => { if (!$("fEmail").value && $("fContact").value.includes("@")) $("fEmail").value = $("fContact").value.trim(); });
+    if ($("fContact").value.includes("@")) $("fEmail").value = $("fContact").value.trim();
     render();
   })();
 </script>
