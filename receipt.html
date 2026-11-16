@@ -9,6 +9,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="/config.js"></script>
   <style>
     /* Printable customer receipt (letter page, receipt on the top half so the coupon strip can be cut off the bottom).
@@ -119,8 +120,9 @@
 
     <div class="row">
       <button class="btn print" type="button" id="emailBtn">Email receipt to customer</button>
-      <button class="btn" type="button" onclick="window.print()">Print or save as PDF</button>
-      <span class="hint" style="margin:0;">No printer needed: in the print window choose <strong>Save as PDF</strong>. Paper: Letter, margins: None.</span>
+      <button class="btn" type="button" id="pdfBtn">Download PDF</button>
+      <button class="btn light" type="button" onclick="window.print()">Print</button>
+      <span class="hint" style="margin:0;">The email carries the same PDF (with the scannable QR code) as an attachment.</span>
     </div>
     <p class="hint" id="emailStatus" style="font-weight:800;"></p>
     <p class="hint" id="srcHint"></p>
@@ -243,6 +245,117 @@
     </div>`;
   }
 
+  // The receipt as a real PDF, drawn directly (text and QR are vectors, so the file stays tiny: about 10 to 20 KB).
+  function buildPdf() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: "pt", format: "letter", compress: true });
+    const W = 612, M = 48, R = W - M;
+    const { lines, gross, disc, tax, total } = calc();
+    const rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const fill = (h) => doc.setFillColor(...rgb(h));
+    const ink = (h) => doc.setTextColor(...rgb(h));
+    const stroke = (h) => doc.setDrawColor(...rgb(h));
+    const bold = () => doc.setFont("helvetica", "bold");
+    const norm = () => doc.setFont("helvetica", "normal");
+    const pdfMoney = (n) => "$" + (Math.round(n * 100) / 100).toFixed(2);
+    let y = M;
+    const ensure = (h) => { if (y + h > 745) { doc.addPage(); y = M; } };
+
+    // header band
+    fill("#241a12"); doc.rect(M, y, R - M, 58, "F");
+    bold(); doc.setFontSize(17); ink("#e2a63b"); doc.text("VINTAGE PLAY COLLECTABLES", M + 16, y + 36);
+    doc.setFontSize(20); doc.text("RECEIPT", R - 16, y + 36, { align: "right" });
+    y += 58 + 24;
+
+    // receipt info + shop
+    ink("#2e2118"); bold(); doc.setFontSize(11); doc.text("Receipt " + $("fNo").value, M, y);
+    norm(); doc.setFontSize(10);
+    doc.text(longDate($("fDate").value), M, y + 15);
+    const name = $("fName").value.trim();
+    if (name) doc.text("For: " + name, M, y + 30);
+    doc.text("Vintage Play Collectables", R, y, { align: "right" });
+    doc.text("Brampton, Ontario", R, y + 15, { align: "right" });
+    doc.text("www.vintageplay.ca  |  info@vintageplay.ca", R, y + 30, { align: "right" });
+    y += 52;
+
+    // table
+    const xQty = M + 300, xPrice = R - 85, xAmt = R;
+    bold(); doc.setFontSize(8); ink("#6b5a48");
+    doc.text("ITEM", M, y); doc.text("QTY", xQty, y, { align: "center" }); doc.text("PRICE", xPrice, y, { align: "right" }); doc.text("AMOUNT", xAmt, y, { align: "right" });
+    y += 5; stroke("#2e2118"); doc.setLineWidth(1); doc.line(M, y, R, y); y += 16;
+    norm(); doc.setFontSize(10.5); ink("#2e2118"); stroke("#ddd2c2"); doc.setLineWidth(0.5);
+    lines.forEach((l) => {
+      const wrapped = doc.splitTextToSize(l.desc || "", 270);
+      const h = Math.max(wrapped.length, 1) * 13;
+      ensure(h + 12);
+      doc.text(wrapped, M, y);
+      doc.text(String(l.qty), xQty, y, { align: "center" });
+      doc.text(pdfMoney(l.price), xPrice, y, { align: "right" });
+      doc.text(pdfMoney(l.qty * l.price), xAmt, y, { align: "right" });
+      y += h + 4; doc.line(M, y, R, y); y += 14;
+    });
+
+    // totals
+    ensure(90);
+    const trow = (a, b, big, color) => {
+      if (big) { bold(); doc.setFontSize(13); } else { norm(); doc.setFontSize(10.5); }
+      ink(color || "#2e2118");
+      doc.text(a, R - 150, y); doc.text(b, xAmt, y, { align: "right" }); y += big ? 20 : 16;
+    };
+    if (disc > 0 || tax > 0) trow("Subtotal", pdfMoney(gross));
+    if (disc > 0) trow("Discount", "-" + pdfMoney(disc), false, "#c2452f");
+    if (tax > 0) trow("HST (13%)", pdfMoney(tax));
+    stroke("#2e2118"); doc.setLineWidth(1); doc.line(R - 150, y - 11, R, y - 11); y += 4;
+    trow("Total (CAD)", pdfMoney(total), true);
+    y += 4;
+    ink("#2e2118"); norm(); doc.setFontSize(10);
+    const pay = $("fPay").value;
+    if (pay) { bold(); doc.text("Paid by: ", M, y); norm(); doc.text(pay, M + doc.getTextWidth("Paid by: ") + 3, y); y += 16; }
+    const note = $("fNote").value.trim();
+    if (note) { ink("#6b5a48"); const nl = doc.splitTextToSize(note, R - M); doc.text(nl, M, y); y += nl.length * 13 + 4; }
+    y += 6;
+
+    // thank-you band
+    ensure(40);
+    fill("#2f7d78"); doc.rect(M, y, R - M, 26, "F");
+    bold(); doc.setFontSize(11); ink("#ffffff"); doc.text("Thank you for supporting a small shop!", W / 2, y + 17, { align: "center" });
+    y += 26 + 30;
+
+    // coupon with QR
+    const code = $("fCode").value.trim().toUpperCase();
+    if ($("fCoupon").checked && code && code !== "THX-SAMPLE") {
+      ensure(190);
+      const pct = Math.round(Number($("fPct").value)) || 10;
+      const until = longDate($("fUntil").value);
+      const link = `${SITE}/?code=${encodeURIComponent(code)}`;
+      const bx = M + 40, bw = R - M - 80, bh = 150;
+      stroke("#c2452f"); doc.setLineWidth(1.5); doc.setLineDashPattern([5, 4], 0); doc.roundedRect(bx, y, bw, bh, 8, 8); doc.setLineDashPattern([], 0);
+      const cx = bx + (bw - 130) / 2;
+      norm(); doc.setFontSize(10); ink("#2e2118"); doc.text("Thanks for shopping with us!", cx, y + 24, { align: "center" });
+      bold(); doc.setFontSize(34); ink("#c2452f"); doc.text(pct + "% OFF", cx, y + 62, { align: "center" });
+      bold(); doc.setFontSize(10); ink("#2e2118"); doc.text("your next order at vintageplay.ca", cx, y + 80, { align: "center" });
+      fill("#241a12"); doc.roundedRect(cx - 70, y + 92, 140, 28, 4, 4, "F");
+      doc.setFont("courier", "bold"); doc.setFontSize(16); ink("#e2a63b"); doc.text(code, cx, y + 111, { align: "center" });
+      // QR (vector squares)
+      try {
+        const qr = qrcode(0, "M"); qr.addData(link); qr.make();
+        const n = qr.getModuleCount(), size = 104, qx = bx + bw - size - 16, qy = y + 14, cell = size / n;
+        fill("#ffffff"); doc.rect(qx - 4, qy - 4, size + 8, size + 8, "F");
+        fill("#2e2118");
+        for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) doc.rect(qx + c * cell, qy + r * cell, cell + 0.25, cell + 0.25, "F");
+        norm(); doc.setFontSize(7.5); ink("#2e2118");
+        doc.text("Scan to shop - code applies for you", qx + size / 2, qy + size + 14, { align: "center", maxWidth: size + 20 });
+      } catch (e) { /* no QR: the code and link below still work */ }
+      y += bh + 16;
+      norm(); doc.setFontSize(8); ink("#6b5a48");
+      const fine = doc.splitTextToSize(`Enter the code in the cart, or scan the QR code. One use per code${until ? `, good until ${until}` : ""}. Can't be combined with other sales (the best discount applies).`, R - M - 40);
+      doc.text(fine, W / 2, y, { align: "center" }); y += fine.length * 10 + 4;
+      ink("#2f7d78"); doc.textWithLink(link, W / 2, y, { align: "center", url: link });
+    }
+    return doc;
+  }
+  const pdfFileName = () => `Vintage Play Receipt ${$("fNo").value}.pdf`;
+
   async function sendEmail() {
     const st = $("emailStatus");
     const to = $("fEmail").value.trim();
@@ -251,18 +364,24 @@
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) { st.textContent = "Type the customer's email address first."; return; }
     const c = calc();
     if (!c.lines.length) { st.textContent = "Add at least one item first."; return; }
-    if (!confirm(`Send receipt ${$("fNo").value} (${money(c.total)}) to ${to}?`)) return;
+    if (!confirm(`Send receipt ${$("fNo").value} (${money(c.total)}) with the PDF attached to ${to}?`)) return;
     $("emailBtn").disabled = true; st.style.color = "#6b5a48"; st.textContent = "Sending...";
     try {
-      await emailjs.send(EMAILJS_SERVICE_ID, RECEIPT_TEMPLATE_ID, {
+      const pdfB64 = buildPdf().output("datauristring").split("base64,")[1];
+      const params = {
         to_email: to,
         subject: `Your receipt from Vintage Play Collectables (${$("fNo").value})`,
         message_html: emailHtml(),
         name: "Vintage Play Collectables",
-      });
+        receipt_pdf: "data:application/pdf;base64," + pdfB64,
+      };
+      // EmailJS's free plan caps one send at about 50 KB in total; stop with a clear message instead of a vague failure.
+      const size = JSON.stringify(params).length;
+      if (size > 49000) throw new Error(`this receipt is too big to attach (${Math.round(size / 1000)} KB, limit about 49 KB). Use Download PDF and send it yourself.`);
+      await emailjs.send(EMAILJS_SERVICE_ID, RECEIPT_TEMPLATE_ID, params);
       st.style.color = "#2f7d78"; st.textContent = `Sent to ${to}. A copy also shows in your Yahoo Sent folder.`;
     } catch (e) {
-      st.style.color = "#c2452f"; st.textContent = `Couldn't send: ${(e && (e.text || e.message)) || "unknown error"}. You can still use Save as PDF.`;
+      st.style.color = "#c2452f"; st.textContent = `Couldn't send: ${(e && (e.text || e.message)) || "unknown error"}. You can still use Download PDF.`;
     } finally { $("emailBtn").disabled = false; }
   }
 
@@ -343,6 +462,7 @@
     document.querySelectorAll(".panel input, .panel select").forEach((el) => { el.addEventListener("input", render); el.addEventListener("change", render); });
     $("addLine").addEventListener("click", () => { addLine(); render(); });
     $("emailBtn").addEventListener("click", sendEmail);
+    $("pdfBtn").addEventListener("click", () => { try { buildPdf().save(pdfFileName()); } catch (e) { $("emailStatus").style.color = "#c2452f"; $("emailStatus").textContent = "Couldn't make the PDF: " + e.message; } });
     try { emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY }); } catch (e) { /* email stays unavailable */ }
     $("fContact").addEventListener("input", () => { if (!$("fEmail").value && $("fContact").value.includes("@")) $("fEmail").value = $("fContact").value.trim(); });
     if ($("fContact").value.includes("@")) $("fEmail").value = $("fContact").value.trim();
