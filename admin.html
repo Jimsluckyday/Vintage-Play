@@ -1332,6 +1332,7 @@
                 <option value="fulfilled" ${order.status === "fulfilled" ? "selected" : ""}>Fulfilled</option>
                 <option value="cancelled" ${order.status === "cancelled" ? "selected" : ""}>Cancelled</option>
               </select>
+              <button class="btn" data-order-receipt="${order.id}">Receipt</button>
               <button class="btn danger" data-order-delete="${order.id}">Delete</button>
             </div>
           </div>
@@ -1346,6 +1347,15 @@
             .update({ status: select.value })
             .eq("id", select.dataset.orderStatus);
           if (error) alert(`Couldn't update: ${error.message}`);
+        })
+      );
+      listEl.querySelectorAll("[data-order-receipt]").forEach((btn) =>
+        btn.addEventListener("click", () => {
+          const order = orders.find((o) => String(o.id) === btn.dataset.orderReceipt);
+          if (!order) return;
+          // Hand the order to receipt.html through this browser's storage (nothing goes in the URL).
+          try { localStorage.setItem("vp_receipt_order", JSON.stringify(order)); } catch (e) { /* ignore */ }
+          window.open("receipt.html?from=order", "_blank");
         })
       );
       listEl.querySelectorAll("[data-order-delete]").forEach((btn) =>

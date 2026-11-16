@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Customer receipt</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+  <style>
+    /* Printable customer receipt (letter page, receipt on the top half so the coupon strip can be cut off the bottom).
+       Open it from the admin page (Orders > Receipt) to fill itself in from an order, or open it directly and type the sale in.
+       Nothing here is saved anywhere: it is a print layout only. */
+    :root { --ink: #2e2118; --ink-soft: #6b5a48; --brick: #c2452f; --mustard: #e2a63b; --teal: #2f7d78; --cream: #fffaf0; --dark: #241a12; }
+    * { box-sizing: border-box; }
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { margin: 0; background: #d9d9d9; font-family: 'Nunito', system-ui, sans-serif; color: var(--ink); }
+
+    /* ---- screen-only form ---- */
+    .panel { background: #fff; border-bottom: 1px solid #bbb; padding: 0.9rem 1rem 1rem; }
+    .panel h1 { margin: 0 0 0.6rem; font-size: 1.15rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.6rem 0.8rem; max-width: 62rem; }
+    .grid label { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.78rem; font-weight: 800; color: var(--ink-soft); }
+    .panel input, .panel select { font: 600 0.95rem 'Nunito', sans-serif; padding: 0.4rem 0.5rem; border: 1px solid #aaa; border-radius: 5px; width: 100%; background: #fff; color: var(--ink); }
+    .lines { margin-top: 0.8rem; max-width: 62rem; }
+    .line-row { display: grid; grid-template-columns: 1fr 4.5rem 7rem 2.2rem; gap: 0.5rem; margin-bottom: 0.4rem; }
+    .line-head { font-size: 0.75rem; font-weight: 800; color: var(--ink-soft); margin-bottom: 0.15rem; }
+    .btn { font: 800 0.95rem 'Nunito', sans-serif; background: var(--teal); color: #fff; border: 0; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; }
+    .btn.light { background: #eee; color: var(--ink); }
+    .btn.print { background: var(--brick); font-size: 1.05rem; padding: 0.6rem 1.3rem; }
+    .btn.x { padding: 0.3rem 0; background: #eee; color: var(--brick); }
+    .row { display: flex; gap: 0.7rem; align-items: center; flex-wrap: wrap; margin-top: 0.7rem; }
+    .check { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; font-weight: 700; }
+    .check input { width: auto; }
+    .hint { font-size: 0.82rem; color: var(--ink-soft); margin: 0.5rem 0 0; max-width: 56rem; }
+
+    /* ---- the printed page ---- */
+    .page { width: 8.5in; height: 11in; margin: 0.4in auto; background: #fff; padding: 0.5in; box-shadow: 0 2px 10px rgba(0,0,0,.3); display: flex; flex-direction: column; overflow: hidden; }
+    .receipt { border: 1px solid #cfc6b8; background: var(--cream); display: flex; flex-direction: column; }
+    .head { background: var(--dark); display: flex; align-items: center; justify-content: space-between; padding: 0.14in 0.25in; }
+    .head img { height: 0.8in; width: auto; display: block; }
+    .head .title { font-family: 'Bangers', cursive; color: var(--mustard); font-size: 30pt; letter-spacing: 0.05em; line-height: 1; text-align: right; }
+    .shop { display: flex; justify-content: space-between; gap: 0.3in; padding: 0.12in 0.25in 0.08in; font-size: 9pt; line-height: 1.45; }
+    .shop .meta { text-align: right; }
+    .shop b { font-weight: 800; }
+    table { width: calc(100% - 0.5in); margin: 0.05in 0.25in 0; border-collapse: collapse; font-size: 10pt; }
+    th { text-align: left; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); border-bottom: 1.5px solid var(--ink); padding: 0.04in 0.05in; }
+    td { padding: 0.055in 0.05in; border-bottom: 0.75px solid #ddd2c2; vertical-align: top; }
+    th.n, td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    th.q, td.q { text-align: center; width: 0.5in; }
+    .totals { margin: 0.1in 0.25in 0; margin-left: auto; width: 2.9in; font-size: 10pt; }
+    .totals div { display: flex; justify-content: space-between; padding: 0.025in 0; font-variant-numeric: tabular-nums; }
+    .totals .grand { border-top: 1.5px solid var(--ink); margin-top: 0.03in; padding-top: 0.05in; font-weight: 800; font-size: 13pt; }
+    .totals .disc { color: var(--brick); font-weight: 700; }
+    .pay { padding: 0.1in 0.25in 0; font-size: 9.5pt; display: flex; justify-content: space-between; gap: 0.2in; }
+    .note { padding: 0.06in 0.25in 0; font-size: 9pt; color: var(--ink-soft); white-space: pre-wrap; }
+    .thanks { margin-top: 0.14in; background: var(--teal); color: #fff; text-align: center; font-weight: 800; font-size: 10pt; letter-spacing: 0.03em; padding: 0.07in 0; }
+
+    .cutline { margin: 0.28in 0 0.1in; text-align: center; font-size: 7.5pt; color: #999; letter-spacing: 0.08em; border-top: 0.75px dashed #9a9a9a; padding-top: 0.04in; }
+    .coupon-wrap { display: flex; justify-content: center; }
+    .coupon-card { width: 5.6in; border: 2px dashed var(--brick); border-radius: 0.12in; background: #fff; display: flex; align-items: center; gap: 0.15in; padding: 0.12in 0.18in; }
+    .coupon-card .txt { flex: 1; text-align: center; }
+    .coupon-card .hi { font-weight: 800; font-size: 9pt; }
+    .off { font-family: 'Bangers', cursive; font-size: 36pt; line-height: 1; color: var(--brick); letter-spacing: 0.02em; }
+    .next { font-weight: 800; font-size: 9pt; margin: 0.02in 0 0.07in; }
+    .code { display: inline-block; font-family: 'Courier New', monospace; font-weight: 700; font-size: 18pt; letter-spacing: 0.07em; background: var(--dark); color: var(--mustard); padding: 0.03in 0.14in; border-radius: 0.06in; }
+    .qr { width: 1.15in; text-align: center; font-size: 6.5pt; font-weight: 800; line-height: 1.2; }
+    .qr svg { width: 1.15in; height: 1.15in; display: block; margin-bottom: 0.03in; }
+    .fine { font-size: 7pt; color: var(--ink-soft); text-align: center; margin-top: 0.08in; line-height: 1.35; }
+    .sample-flag { text-align: center; font-weight: 800; color: var(--brick); font-size: 8pt; margin-bottom: 0.05in; }
+
+    @page { size: letter; margin: 0; }
+    @media print {
+      body { background: #fff; }
+      .panel { display: none; }
+      .page { margin: 0; box-shadow: none; }
+      .receipt { border-color: transparent; }
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h1>Customer receipt</h1>
+    <div class="grid">
+      <label>Receipt number<input id="fNo" /></label>
+      <label>Date<input id="fDate" type="date" /></label>
+      <label>Customer name<input id="fName" placeholder="Name on the receipt" /></label>
+      <label>Contact (optional)<input id="fContact" placeholder="Email or phone" /></label>
+      <label>Paid by
+        <select id="fPay">
+          <option>Cash</option><option>e-Transfer</option><option>PayPal</option><option>Bitcoin</option><option>Other</option><option value="">(leave off)</option>
+        </select>
+      </label>
+      <label>Discount in dollars<input id="fDisc" type="number" min="0" step="0.01" placeholder="0.00" /></label>
+    </div>
+
+    <div class="lines">
+      <div class="line-row line-head"><span>Item</span><span>Qty</span><span>Price each ($)</span><span></span></div>
+      <div id="lineRows"></div>
+      <button class="btn light" id="addLine" type="button">+ Add item</button>
+    </div>
+
+    <div class="row">
+      <label class="check"><input type="checkbox" id="fHst" /> Add HST (13%) on top of these prices</label>
+      <label class="check"><input type="checkbox" id="fCoupon" checked /> Include a thank-you coupon</label>
+    </div>
+    <div class="grid" id="couponFields" style="margin-top:0.6rem;">
+      <label>Coupon code<input id="fCode" placeholder="THX-XXXXX" /></label>
+      <label>Percent off<input id="fPct" type="number" min="1" max="90" value="10" /></label>
+      <label>Good until (optional)<input id="fUntil" type="date" /></label>
+    </div>
+    <div class="grid" style="margin-top:0.6rem;">
+      <label style="grid-column: 1 / -1;">Note on the receipt (optional)<input id="fNote" placeholder="e.g. Local pickup, Brampton" /></label>
+    </div>
+
+    <div class="row">
+      <button class="btn print" type="button" onclick="window.print()">Print or save as PDF</button>
+      <span class="hint" style="margin:0;">Paper: Letter, margins: None. The receipt prints on the top of the page; cut along the dashed line to hand over the coupon separately.</span>
+    </div>
+    <p class="hint" id="srcHint"></p>
+  </div>
+
+  <div class="page">
+    <div class="receipt">
+      <div class="head"><img src="logo.png" alt="Vintage Play Collectables" /><div class="title">Receipt</div></div>
+      <div class="shop">
+        <div><b>Vintage Play Collectables</b><br />Brampton, Ontario<br />www.vintageplay.ca &middot; info@vintageplay.ca</div>
+        <div class="meta"><b>Receipt <span id="oNo"></span></b><br /><span id="oDate"></span><br /><span id="oName"></span></div>
+      </div>
+      <table>
+        <thead><tr><th>Item</th><th class="q">Qty</th><th class="n">Price</th><th class="n">Amount</th></tr></thead>
+        <tbody id="oLines"></tbody>
+      </table>
+      <div class="totals" id="oTotals"></div>
+      <div class="pay"><span id="oPay"></span><span id="oContact"></span></div>
+      <div class="note" id="oNote"></div>
+      <div class="thanks">Thank you for supporting a small shop!</div>
+    </div>
+
+    <div id="oCouponBox"></div>
+  </div>
+
+<script>
+  const SITE = "https://www.vintageplay.ca";
+  const HST = 0.13;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const money = (n) => "$" + (Math.round(n * 100) / 100).toFixed(2);
+  const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const longDate = (s) => (s ? new Date(`${s}T12:00:00`).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" }) : "");
+
+  // QR code as plain SVG squares (prints sharp at any size)
+  function qrSvg(text) {
+    try {
+      const qr = qrcode(0, "M"); qr.addData(text); qr.make();
+      const n = qr.getModuleCount(); let path = "";
+      for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) path += `M${c} ${r}h1v1h-1z`;
+      return `<svg viewBox="-1 -1 ${n + 2} ${n + 2}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges"><rect x="-1" y="-1" width="${n + 2}" height="${n + 2}" fill="#fff"/><path d="${path}" fill="#2e2118"/></svg>`;
+    } catch (e) { return ""; }
+  }
+
+  // ---- lines ----
+  function addLine(desc = "", qty = 1, price = "") {
+    const row = document.createElement("div");
+    row.className = "line-row";
+    row.innerHTML = `<input class="ld" placeholder="Item description" /><input class="lq" type="number" min="1" step="1" /><input class="lp" type="number" min="0" step="0.01" placeholder="0.00" /><button type="button" class="btn x" title="Remove this line">&times;</button>`;
+    row.querySelector(".ld").value = desc; row.querySelector(".lq").value = qty; row.querySelector(".lp").value = price;
+    row.querySelectorAll("input").forEach((i) => i.addEventListener("input", render));
+    row.querySelector(".x").addEventListener("click", () => { row.remove(); render(); });
+    $("lineRows").appendChild(row);
+  }
+  function readLines() {
+    return [...document.querySelectorAll("#lineRows .line-row")].map((r) => ({
+      desc: r.querySelector(".ld").value.trim(),
+      qty: Math.max(1, Math.round(Number(r.querySelector(".lq").value) || 1)),
+      price: Number(r.querySelector(".lp").value) || 0,
+    })).filter((l) => l.desc || l.price);
+  }
+
+  // ---- receipt number: R-YYYYMMDD-n, counting up per day (kept in this browser only) ----
+  function nextReceiptNo(dateStr) {
+    const day = dateStr.replace(/-/g, "");
+    let n = 1;
+    try {
+      const saved = JSON.parse(localStorage.getItem("vp_receipt_counter") || "{}");
+      n = saved.day === day ? saved.n + 1 : 1;
+      localStorage.setItem("vp_receipt_counter", JSON.stringify({ day, n }));
+    } catch (e) { /* private mode: just use 1 */ }
+    return `R-${day}-${n}`;
+  }
+
+  function render() {
+    const lines = readLines();
+    const gross = lines.reduce((s, l) => s + l.qty * l.price, 0);
+    const disc = Math.min(Math.max(Number($("fDisc").value) || 0, 0), gross);
+    const after = gross - disc;
+    const tax = $("fHst").checked ? Math.round(after * HST * 100) / 100 : 0;
+    const total = after + tax;
+
+    $("oNo").textContent = $("fNo").value;
+    $("oDate").textContent = longDate($("fDate").value);
+    $("oName").textContent = $("fName").value.trim();
+    $("oLines").innerHTML = lines.length
+      ? lines.map((l) => `<tr><td>${esc(l.desc)}</td><td class="q">${l.qty}</td><td class="n">${money(l.price)}</td><td class="n">${money(l.qty * l.price)}</td></tr>`).join("")
+      : `<tr><td colspan="4" style="color:#999;">Add the items above.</td></tr>`;
+    let t = "";
+    if (disc > 0 || tax > 0) t += `<div><span>Subtotal</span><span>${money(gross)}</span></div>`;
+    if (disc > 0) t += `<div class="disc"><span>Discount</span><span>&minus;${money(disc)}</span></div>`;
+    if (tax > 0) t += `<div><span>HST (13%)</span><span>${money(tax)}</span></div>`;
+    t += `<div class="grand"><span>Total (CAD)</span><span>${money(total)}</span></div>`;
+    $("oTotals").innerHTML = t;
+    const pay = $("fPay").value;
+    $("oPay").innerHTML = pay ? `<b>Paid by:</b> ${esc(pay)}` : "";
+    $("oContact").textContent = $("fContact").value.trim();
+    $("oNote").textContent = $("fNote").value.trim();
+
+    // coupon strip
+    const on = $("fCoupon").checked;
+    $("couponFields").style.display = on ? "" : "none";
+    const code = $("fCode").value.trim().toUpperCase();
+    if (!on || !code) { $("oCouponBox").innerHTML = ""; return; }
+    const pct = Math.round(Number($("fPct").value)) || 10;
+    const untilText = longDate($("fUntil").value);
+    const isSample = code === "THX-SAMPLE";
+    $("oCouponBox").innerHTML = `
+      <div class="cutline">&#9986; &nbsp;cut here and hand to the customer</div>
+      ${isSample ? `<div class="sample-flag">SAMPLE &mdash; this code is not real</div>` : ""}
+      <div class="coupon-wrap"><div class="coupon-card">
+        <div class="txt">
+          <div class="hi">Thanks for shopping with us!</div>
+          <div class="off">${pct}% OFF</div>
+          <div class="next">your next order at vintageplay.ca</div>
+          <div class="code">${esc(code)}</div>
+        </div>
+        <div class="qr">${qrSvg(`${SITE}/?code=${encodeURIComponent(code)}`)}Scan to shop &mdash;<br />code applies for you</div>
+      </div></div>
+      <div class="fine">Enter the code in the cart, or scan the QR code. One use per code${untilText ? `, good until ${esc(untilText)}` : ""}. Can't be combined with other sales (the best discount applies).</div>`;
+  }
+
+  // ---- start up: fill from an admin order if one was handed over, otherwise a fresh blank receipt ----
+  (function init() {
+    const today = ymd(new Date());
+    let order = null;
+    if (new URLSearchParams(location.search).get("from") === "order") {
+      try { order = JSON.parse(localStorage.getItem("vp_receipt_order") || "null"); } catch (e) { order = null; }
+    }
+    $("fDate").value = order && order.created_at ? ymd(new Date(order.created_at)) : today;
+    $("fNo").value = nextReceiptNo($("fDate").value);
+    if (order) {
+      $("fName").value = order.customer_name || "";
+      $("fContact").value = order.customer_contact || "";
+      (order.items || []).forEach((i) => addLine(i.title, Number(i.qty) || 1, Number(i.list_price != null ? i.list_price : i.price) || 0));
+      // The order's items carry the price each (list price before any promo code); the discount is shown as its own line.
+      const disc = Number(order.discount_total) || 0;
+      if (disc > 0) $("fDisc").value = disc.toFixed(2);
+      $("srcHint").textContent = "Filled in from the order request" + (order.promo_code ? ` (promo code ${order.promo_code} was used: shown as the discount line)` : "") + ". Check each amount against what the customer actually paid, and change anything here before printing.";
+    } else {
+      addLine(); addLine();
+      $("srcHint").textContent = "Type the sale in, or open it from the admin page (Orders > Receipt) to fill it in from an order request. The coupon code comes from the Thank-You Coupons section of the admin page (or the SQL file I gave you).";
+    }
+    const params = new URLSearchParams(location.search);
+    if (params.get("code")) $("fCode").value = params.get("code");
+    else $("fCode").value = "THX-SAMPLE";
+    if (params.get("pct")) $("fPct").value = params.get("pct");
+    if (params.get("until")) $("fUntil").value = params.get("until");
+    document.querySelectorAll(".panel input, .panel select").forEach((el) => { el.addEventListener("input", render); el.addEventListener("change", render); });
+    $("addLine").addEventListener("click", () => { addLine(); render(); });
+    render();
+  })();
+</script>
+</body>
+</html>
