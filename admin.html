@@ -133,6 +133,10 @@
     <div class="section">
       <h2>Orders (<span id="orderCount">0</span>)</h2>
       <p class="hint">Requests buyers submit from the cart. You should also get an email for each one — this list is the backup record.</p>
+      <div class="btn-row">
+        <button type="button" class="btn" id="pickListBtn">Print pick list for all open orders</button>
+        <span class="hint" style="margin:0;">Everything on orders that are New or Contacted (not yet recorded as sold), grouped by box and A-Z inside each box, with a tick box for each item. Each order also has its own Pick list button.</span>
+      </div>
       <div id="orderList"></div>
     </div>
 
@@ -1616,6 +1620,50 @@
       return { ok: true, done };
     }
 
+    // Printable pick list: every item on the given orders, grouped by the box it is in (items.tote), A-Z inside each box,
+    // with a tick box. Opens in a new tab ready to print or save as PDF.
+    function openPickList(orderList, heading) {
+      const groups = new Map();
+      let total = 0;
+      orderList.forEach((o) => {
+        (o.items || []).forEach((line) => {
+          const item = items.find((i) => i.id === line.id);
+          const toteText = item ? (item.tote || "").trim() : "";
+          const names = toteNames(toteText);
+          const keys = names.length ? names : [item ? "(no box recorded)" : "(not in inventory any more)"];
+          total += Number(line.qty) || 1;
+          keys.forEach((k) => {
+            if (!groups.has(k)) groups.set(k, []);
+            groups.get(k).push({ title: line.title || (item && item.title) || "", qty: Number(line.qty) || 1, who: o.customer_name || o.customer_contact || "", date: new Date(o.created_at).toLocaleDateString(), split: names.length > 1 ? toteText : "" });
+          });
+        });
+      });
+      if (!groups.size) { alert("There is nothing to pick: no open orders with items."); return; }
+      const sortKey = (t) => t.replace(/^(the|a|an)\s+/i, "").toLowerCase();
+      const boxes = [...groups.keys()].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      const sections = boxes.map((k) => {
+        const rows = groups.get(k).sort((a, b) => sortKey(a.title).localeCompare(sortKey(b.title)));
+        return `<h2>${escapeHtml(k)} <span class="n">(${rows.reduce((t, r) => t + r.qty, 0)})</span></h2><table>` +
+          rows.map((r) => `<tr><td class="b">&#9744;</td><td class="q">${r.qty}</td><td>${escapeHtml(r.title)}${r.split ? `<div class="s">copies are split across boxes: ${escapeHtml(r.split)}</div>` : ""}</td><td class="w">${escapeHtml(r.who)}<div class="s">${escapeHtml(r.date)}</div></td></tr>`).join("") + `</table>`;
+      }).join("");
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(heading)}</title><style>
+        body{font-family:Arial,Helvetica,sans-serif;color:#2e2118;margin:0;padding:0.5in;font-size:12pt}
+        h1{font-size:18pt;margin:0 0 0.05in} .sub{color:#6b5a48;font-size:10pt;margin-bottom:0.15in}
+        h2{font-size:13pt;background:#241a12;color:#e2a63b;padding:0.05in 0.1in;margin:0.2in 0 0.04in;break-after:avoid}
+        h2 .n{font-weight:normal;font-size:10pt;color:#fff}
+        table{width:100%;border-collapse:collapse} tr{break-inside:avoid} td{border-bottom:1px solid #ddd2c2;padding:0.06in 0.05in;vertical-align:top}
+        td.b{width:0.35in;font-size:16pt;text-align:center;line-height:1} td.q{width:0.4in;font-weight:bold;text-align:center} td.w{width:2in;font-size:10pt}
+        .s{font-size:8.5pt;color:#6b5a48} .bar{margin-bottom:0.2in} button{font:bold 12pt Arial;padding:0.08in 0.2in;background:#2f7d78;color:#fff;border:0;border-radius:5px;cursor:pointer}
+        @media print{.bar{display:none} body{padding:0.3in}}</style></head><body>
+        <div class="bar"><button onclick="window.print()">Print or save as PDF</button></div>
+        <h1>${escapeHtml(heading)}</h1><div class="sub">${new Date().toLocaleDateString()} &middot; ${total} item${total === 1 ? "" : "s"} &middot; ${boxes.length} box${boxes.length === 1 ? "" : "es"} &middot; Vintage Play Collectables</div>
+        ${sections}</body></html>`;
+      const w = window.open("", "_blank");
+      if (!w) { alert("The pick list was blocked as a pop-up. Allow pop-ups for this page and try again."); return; }
+      w.document.write(html);
+      w.document.close();
+    }
+
     // Turns a paid/fulfilled website order into real sales: one sales row per line (at the price actually charged), the sold
     // quantity comes out of stock (last unit marks the listing sold), and the order is stamped so it can't be done twice.
     async function recordOrderSale(order) {
@@ -1722,6 +1770,11 @@
       }).join("");
     }
     document.getElementById("customerSearch").addEventListener("input", renderCustomers);
+    document.getElementById("pickListBtn").addEventListener("click", () => {
+      const open = lastOrders.filter((o) => (o.status === "new" || o.status === "contacted") && !o.inventory_removed_at);
+      if (!open.length) { alert("There are no open orders (New or Contacted) to pick."); return; }
+      openPickList(open, `Pick list - ${open.length} open order${open.length === 1 ? "" : "s"}`);
+    });
 
     // ---- Log an offline sale for a customer ----
     let osLines = [];
@@ -1827,6 +1880,7 @@
               ${order.inventory_removed_at
                 ? `<span class="meta" style="font-weight:800;color:#2f7d78;">Sold &amp; removed from inventory (${new Date(order.inventory_removed_at).toLocaleDateString()})</span>`
                 : `<button class="btn" data-order-sold="${order.id}">Record sale &amp; remove from inventory</button>`}
+              <button class="btn" data-order-pick="${order.id}">Pick list</button>
               <button class="btn" data-order-receipt="${order.id}">Receipt</button>
               <button class="btn danger" data-order-delete="${order.id}">Delete</button>
             </div>
@@ -1847,6 +1901,12 @@
               confirm("Marked Fulfilled.\n\nAlso record this as a sale and remove the items from inventory now?")) {
             await recordOrderSale(order);
           }
+        })
+      );
+      listEl.querySelectorAll("[data-order-pick]").forEach((btn) =>
+        btn.addEventListener("click", () => {
+          const order = orders.find((o) => String(o.id) === btn.dataset.orderPick);
+          if (order) openPickList([order], "Pick list - one order");
         })
       );
       listEl.querySelectorAll("[data-order-sold]").forEach((btn) =>
