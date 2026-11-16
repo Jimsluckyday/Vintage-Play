@@ -137,6 +137,7 @@
     <button class="btn" type="button" id="pdfBtn2">Save as PDF</button>
     <button class="btn light" type="button" id="printBtn2">Print</button>
     <p>Your receipt from Vintage Play Collectables. Scan the QR code at the bottom with your phone camera to shop with your coupon.</p>
+    <p id="viewStatus" style="font-weight:800;"></p>
   </div>
 
   <div class="page">
@@ -368,6 +369,20 @@
   }
   const pdfFileName = () => `Vintage Play Receipt ${$("fNo").value}.pdf`;
 
+  // Download the PDF, and always say what happened (some browsers block downloads quietly), with a link as a second way to get it.
+  function savePdf(statusId) {
+    const st = $(statusId);
+    try {
+      const doc = buildPdf(), name = pdfFileName();
+      doc.save(name);
+      const url = URL.createObjectURL(doc.output("blob"));
+      st.style.color = "#2f7d78";
+      st.innerHTML = `PDF made: <b>${esc(name)}</b>. It should be in your Downloads folder. If nothing downloaded, <a href="${url}" target="_blank" rel="noopener" download="${esc(name)}">click here to open or save it</a>.`;
+    } catch (e) {
+      st.style.color = "#c2452f"; st.textContent = "Couldn't make the PDF: " + e.message;
+    }
+  }
+
   async function sendEmail() {
     const st = $("emailStatus");
     const to = $("fEmail").value.trim();
@@ -409,7 +424,7 @@
   async function startSharedView(id) {
     document.body.classList.add("view");
     $("viewBar").hidden = false;
-    $("pdfBtn2").addEventListener("click", () => buildPdf().save(pdfFileName()));
+    $("pdfBtn2").addEventListener("click", () => savePdf("viewStatus"));
     $("printBtn2").addEventListener("click", () => window.print());
     let data = null;
     try {
@@ -513,7 +528,7 @@
     document.querySelectorAll(".panel input, .panel select").forEach((el) => { el.addEventListener("input", render); el.addEventListener("change", render); });
     $("addLine").addEventListener("click", () => { addLine(); render(); });
     $("emailBtn").addEventListener("click", sendEmail);
-    $("pdfBtn").addEventListener("click", () => { try { buildPdf().save(pdfFileName()); } catch (e) { $("emailStatus").style.color = "#c2452f"; $("emailStatus").textContent = "Couldn't make the PDF: " + e.message; } });
+    $("pdfBtn").addEventListener("click", () => savePdf("emailStatus"));
     try { emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY }); } catch (e) { /* email stays unavailable */ }
     $("fContact").addEventListener("input", () => { if (!$("fEmail").value && $("fContact").value.includes("@")) $("fEmail").value = $("fContact").value.trim(); });
     if ($("fContact").value.includes("@")) $("fEmail").value = $("fContact").value.trim();
