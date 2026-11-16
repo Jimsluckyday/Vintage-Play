@@ -1303,6 +1303,66 @@
       renderOrderList(data);
     }
 
+    // Turns a paid/fulfilled website order into real sales: one sales row per line (at the price actually charged), the sold
+    // quantity comes out of stock (last unit marks the listing sold), and the order is stamped so it can't be done twice.
+    async function recordOrderSale(order) {
+      if (!("inventory_removed_at" in order)) {
+        alert("One-time setup needed: run orders_inventory_setup.sql in the Supabase SQL Editor, then reload this page and try again.");
+        return false;
+      }
+      if (order.inventory_removed_at) {
+        alert("This order has already been recorded as sold.");
+        return false;
+      }
+      if (!items.length) await loadItems();
+      const plan = [];
+      const notes = [];
+      (order.items || []).forEach((line) => {
+        const item = items.find((i) => i.id === line.id);
+        const want = Number(line.qty) || 1;
+        if (!item) { notes.push(`${line.title}: not found in inventory (skipped)`); return; }
+        const avail = Number(item.quantity) || 0;
+        const qty = Math.min(want, avail);
+        if (qty < 1) { notes.push(`${line.title}: none left in stock (skipped)`); return; }
+        if (qty < want) notes.push(`${line.title}: ordered ${want} but only ${avail} in stock, recording ${qty}`);
+        plan.push({ item, qty, price: Number(line.price) || 0 });
+      });
+      if (!plan.length) {
+        alert("Nothing to record: none of this order's items are in stock any more.\n\n" + notes.join("\n"));
+        return false;
+      }
+      const msg = "Record this sale and remove from inventory?\n\n" +
+        plan.map((x) => `${x.qty} x ${x.item.title} @ $${x.price.toFixed(2)}` + (Number(x.item.quantity) - x.qty > 0 ? ` (${Number(x.item.quantity) - x.qty} stay in stock)` : " (listing marked sold)")).join("\n") +
+        (notes.length ? "\n\nNotes:\n" + notes.join("\n") : "");
+      if (!confirm(msg)) return false;
+
+      const done = [];
+      for (const x of plan) {
+        const { error: saleError } = await supabaseClient.from("sales").insert({
+          item_id: x.item.id, title: x.item.title, category: x.item.category, quantity: x.qty,
+          price_each: x.price, cost_basis_each: x.item.cost_basis, channel: "Website order",
+        });
+        if (saleError) {
+          alert(`Couldn't record the sale of "${x.item.title}": ${saleError.message}\n\n` + (done.length ? `Already recorded before the error (do NOT redo these): ${done.join(", ")}` : "Nothing was changed."));
+          await loadSales(); await loadItems();
+          return false;
+        }
+        const remaining = Number(x.item.quantity) - x.qty;
+        const updates = remaining > 0 ? { quantity: remaining } : { quantity: 0, status: "sold" };
+        const { error: itemError } = await supabaseClient.from("items").update(updates).eq("id", x.item.id);
+        if (itemError) {
+          alert(`Sale recorded, but couldn't update stock for "${x.item.title}": ${itemError.message}. Fix that listing by hand.`);
+        }
+        done.push(x.item.title);
+      }
+      const { error: markError } = await supabaseClient.from("orders").update({ inventory_removed_at: new Date().toISOString(), status: "fulfilled" }).eq("id", order.id);
+      if (markError) alert(`Sales recorded, but couldn't mark the order: ${markError.message}. Do NOT record it again.`);
+      await loadSales();
+      await loadItems();
+      await loadOrders();
+      return true;
+    }
+
     function renderOrderList(orders) {
       document.getElementById("orderCount").textContent = orders.length;
       const listEl = document.getElementById("orderList");
@@ -1332,6 +1392,9 @@
                 <option value="fulfilled" ${order.status === "fulfilled" ? "selected" : ""}>Fulfilled</option>
                 <option value="cancelled" ${order.status === "cancelled" ? "selected" : ""}>Cancelled</option>
               </select>
+              ${order.inventory_removed_at
+                ? `<span class="meta" style="font-weight:800;color:#2f7d78;">Sold &amp; removed from inventory (${new Date(order.inventory_removed_at).toLocaleDateString()})</span>`
+                : `<button class="btn" data-order-sold="${order.id}">Record sale &amp; remove from inventory</button>`}
               <button class="btn" data-order-receipt="${order.id}">Receipt</button>
               <button class="btn danger" data-order-delete="${order.id}">Delete</button>
             </div>
@@ -1346,7 +1409,18 @@
             .from("orders")
             .update({ status: select.value })
             .eq("id", select.dataset.orderStatus);
-          if (error) alert(`Couldn't update: ${error.message}`);
+          if (error) { alert(`Couldn't update: ${error.message}`); return; }
+          const order = orders.find((o) => String(o.id) === select.dataset.orderStatus);
+          if (select.value === "fulfilled" && order && !order.inventory_removed_at &&
+              confirm("Marked Fulfilled.\n\nAlso record this as a sale and remove the items from inventory now?")) {
+            await recordOrderSale(order);
+          }
+        })
+      );
+      listEl.querySelectorAll("[data-order-sold]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          const order = orders.find((o) => String(o.id) === btn.dataset.orderSold);
+          if (order) await recordOrderSale(order);
         })
       );
       listEl.querySelectorAll("[data-order-receipt]").forEach((btn) =>
