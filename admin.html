@@ -113,11 +113,20 @@
       <div style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;margin-top:0.5rem;">
         <select id="thanksFilter" style="max-width:14rem;">
           <option value="all">Show all coupons</option>
-          <option value="open">Not used yet</option>
+          <option value="open">Not used yet (all)</option>
+          <option value="stack">In my stack (not handed out)</option>
+          <option value="given">Handed out, not used yet</option>
           <option value="used">Used</option>
         </select>
         <button type="button" class="btn secondary" id="thanksReprintBtn" style="margin-top:0;">Reprint the unused ones</button>
       </div>
+      <div style="display:flex;flex-wrap:wrap;gap:0.6rem;align-items:center;margin-top:0.6rem;">
+        <label for="thanksBulkDate" style="margin:0;font-weight:700;">Change &ldquo;good until&rdquo; for every code that hasn&rsquo;t been used:</label>
+        <input type="date" id="thanksBulkDate" style="max-width:11rem;" />
+        <button type="button" class="btn secondary" id="thanksBulkBtn" style="margin-top:0;">Apply to all unused</button>
+        <button type="button" class="btn secondary" id="thanksBulkClearBtn" style="margin-top:0;">Remove the end date (never expires)</button>
+      </div>
+      <p class="hint">A coupon is &ldquo;handed out&rdquo; once its note box has something in it (who it went to). The receipt page fills that in for you when you email a receipt or click &ldquo;Mark code as handed out&rdquo;. A date printed on a receipt or flyer doesn&rsquo;t change when you change the date here.</p>
       <div id="thanksList" style="margin-top:0.5rem;"></div>
     </div>
 
@@ -1177,7 +1186,8 @@
       if (used.length) return { cls: "used", text: "USED", color: "#2f7d78", orders: used };
       if (!p.active) return { cls: "off", text: "Turned off", color: "#8a8a8a", orders: [] };
       if (p.ends_at && new Date(p.ends_at) < new Date()) return { cls: "expired", text: "Expired", color: "#8a8a8a", orders: [] };
-      return { cls: "open", text: "Not used yet", color: "#b8860b", orders: [] };
+      if (p.note && p.note.trim()) return { cls: "open", given: true, text: "Handed out, not used yet", color: "#2f6fb0", orders: [] };
+      return { cls: "open", given: false, text: "In your stack (not handed out)", color: "#b8860b", orders: [] };
     }
 
     function renderThanks() {
@@ -1191,7 +1201,8 @@
         : "No thank-you coupons yet.";
 
       const filter = document.getElementById("thanksFilter").value;
-      const shown = withStatus.filter((x) => filter === "all" || (filter === "used" ? x.st.cls === "used" : x.st.cls === "open"));
+      const shown = withStatus.filter((x) => filter === "all" || (filter === "used" ? x.st.cls === "used"
+        : filter === "stack" ? x.st.cls === "open" && !x.st.given : filter === "given" ? x.st.cls === "open" && x.st.given : x.st.cls === "open"));
       const listEl = document.getElementById("thanksList");
       if (!shown.length) {
         listEl.innerHTML = `<p class="hint">${thanksCoupons.length ? "Nothing in that view." : "Create some above and they show up here."}</p>`;
@@ -1207,7 +1218,9 @@
                   ${Number(p.percent)}% off &mdash; <strong style="color:${st.color};">${st.text}</strong></h4>
                 <div class="meta">Made ${new Date(p.created_at).toLocaleDateString()}${p.ends_at ? ` &middot; good until ${new Date(p.ends_at).toLocaleDateString()}` : ""}${o ? ` &middot; used ${new Date(o.created_at).toLocaleDateString()} by ${escapeHtml(o.customer_name || "a customer")}: order of $${Number(o.total || 0).toFixed(2)}, saved $${Number(o.discount_total || 0).toFixed(2)}` : ""}</div>
                 <input type="text" data-thanks-note="${p.id}" value="${escapeHtml(p.note || "")}" placeholder="Who it went to / eBay order # (optional)" style="max-width:24rem;margin-top:0.4rem;" />
-                <div class="btn-row" style="margin-top:0.5rem;">
+                <div class="btn-row" style="margin-top:0.5rem;align-items:center;">
+                  <label style="margin:0;font-size:0.85rem;">Good until <input type="date" data-thanks-until="${p.id}" value="${p.ends_at ? localYmd(p.ends_at) : ""}" style="width:10.5rem;display:inline-block;" /></label>
+                  <button type="button" class="btn secondary" data-thanks-toggle="${p.id}" style="margin-top:0;">${p.active ? "Turn off" : "Turn on"}</button>
                   <button type="button" class="btn secondary" data-thanks-print="${p.id}" style="margin-top:0;">Print flyer</button>
                   <button type="button" class="btn secondary" data-thanks-link="${p.id}" style="margin-top:0;">Copy link</button>
                   <button type="button" class="btn danger" data-thanks-delete="${p.id}" style="margin-top:0;">Delete</button>
@@ -1224,6 +1237,23 @@
           const { error } = await supabaseClient.from("promotions").update({ note: input.value.trim() || null }).eq("id", p.id);
           if (error) return alert(`Couldn't save the note: ${error.message}`);
           p.note = input.value.trim() || null;
+        })
+      );
+      listEl.querySelectorAll("[data-thanks-until]").forEach((input) =>
+        input.addEventListener("change", async () => {
+          const p = find(input.dataset.thanksUntil);
+          const ends = input.value ? new Date(`${input.value}T23:59:59`).toISOString() : null;
+          const { error } = await supabaseClient.from("promotions").update({ ends_at: ends }).eq("id", p.id);
+          if (error) return alert(`Couldn't change the date: ${error.message}`);
+          await loadPromos();
+        })
+      );
+      listEl.querySelectorAll("[data-thanks-toggle]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          const p = find(btn.dataset.thanksToggle);
+          const { error } = await supabaseClient.from("promotions").update({ active: !p.active }).eq("id", p.id);
+          if (error) return alert(`Couldn't update: ${error.message}`);
+          await loadPromos();
         })
       );
       listEl.querySelectorAll("[data-thanks-print]").forEach((btn) =>
@@ -1256,6 +1286,21 @@
     }
 
     document.getElementById("thanksFilter").addEventListener("change", renderThanks);
+
+    // Change the end date of every coupon that hasn't been used (open or expired; codes you turned off are left alone).
+    async function bulkThanksDate(clear) {
+      const dateVal = document.getElementById("thanksBulkDate").value;
+      if (!clear && !dateVal) return alert("Pick the new 'good until' date first.");
+      const ids = thanksCoupons.filter((p) => { const c = thanksStatus(p).cls; return c === "open" || c === "expired"; }).map((p) => p.id);
+      if (!ids.length) return alert("There are no unused coupons to change.");
+      const ends = clear ? null : new Date(`${dateVal}T23:59:59`).toISOString();
+      if (!confirm(clear ? `Remove the end date from ${ids.length} unused coupon(s) so they never expire?` : `Set 'good until' to ${new Date(`${dateVal}T12:00:00`).toLocaleDateString()} for ${ids.length} unused coupon(s)?`)) return;
+      const { error } = await supabaseClient.from("promotions").update({ ends_at: ends }).in("id", ids);
+      if (error) return alert(`Couldn't change the dates: ${error.message}`);
+      await loadPromos();
+    }
+    document.getElementById("thanksBulkBtn").addEventListener("click", () => bulkThanksDate(false));
+    document.getElementById("thanksBulkClearBtn").addEventListener("click", () => bulkThanksDate(true));
 
     document.getElementById("thanksReprintBtn").addEventListener("click", () => {
       const open = thanksCoupons.filter((p) => thanksStatus(p).cls === "open");

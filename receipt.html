@@ -118,6 +118,10 @@
       <label>Coupon code<input id="fCode" placeholder="THX-XXXXX" /></label>
       <label>Percent off<input id="fPct" type="number" min="1" max="90" value="10" /></label>
       <label>Good until (optional)<input id="fUntil" type="date" /></label>
+      <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:flex-end;">
+        <button class="btn light" type="button" id="nextCodeBtn">Use next unused code</button>
+        <button class="btn light" type="button" id="markGivenBtn">Mark code as handed out</button>
+      </div>
     </div>
     <div class="grid" style="margin-top:0.6rem;">
       <label style="grid-column: 1 / -1;">Note on the receipt (optional)<input id="fNote" placeholder="e.g. Local pickup, Brampton" /></label>
@@ -383,6 +387,39 @@
     }
   }
 
+  // ---- coupon bookkeeping (needs the admin login in this browser) ----
+  // "Handed out" = the coupon's note box in admin has text in it. This fills it in so you can tell stack codes from given ones.
+  async function markHandedOut(silent) {
+    const st = $("emailStatus");
+    const code = $("fCode").value.trim().toUpperCase();
+    if (!code || code === "THX-SAMPLE") { if (!silent) { st.style.color = "#c2452f"; st.textContent = "Put a real coupon code in first."; } return false; }
+    const who = $("fName").value.trim() || $("fEmail").value.trim() || "customer";
+    const note = `Receipt ${$("fNo").value} - ${who} - ${$("fDate").value}`;
+    const res = await supabaseClient.from("promotions").update({ note }).eq("code", code).is("note", null).select("id");
+    if (res.error) { if (!silent) { st.style.color = "#c2452f"; st.textContent = "Couldn't mark it (" + res.error.message + "). Log in on the admin page in this browser first."; } return false; }
+    if (!silent) {
+      st.style.color = (res.data && res.data.length) ? "#2f7d78" : "#6b5a48";
+      st.textContent = (res.data && res.data.length) ? `${code} is marked as handed out (${note}).` : `${code} already has a note in admin (nothing changed) or isn't a saved coupon.`;
+    }
+    return !!(res.data && res.data.length);
+  }
+
+  async function useNextCode() {
+    const st = $("emailStatus");
+    st.style.color = "#6b5a48"; st.textContent = "Looking for an unused code...";
+    const list = await supabaseClient.from("promotions").select("code,percent,ends_at").eq("kind", "thank_you").eq("active", true).is("note", null).order("created_at", { ascending: true }).limit(200);
+    if (list.error || !list.data) { st.style.color = "#c2452f"; st.textContent = "Couldn't read the coupons. Log in on the admin page in this same browser first."; return; }
+    const used = await supabaseClient.from("orders").select("promo_code").not("promo_code", "is", null);
+    const usedSet = new Set(((used.data) || []).map((o) => String(o.promo_code).toLowerCase()));
+    const pick = list.data.find((p) => !usedSet.has(p.code.toLowerCase()) && (!p.ends_at || new Date(p.ends_at) > new Date()));
+    if (!pick) { st.style.color = "#c2452f"; st.textContent = "No unused, not-handed-out codes left. Make more in the Thank-You Coupons section of admin (or extend the dates)."; return; }
+    $("fCode").value = pick.code; $("fPct").value = Math.round(Number(pick.percent)) || 10;
+    $("fUntil").value = pick.ends_at ? ymd(new Date(pick.ends_at)) : "";
+    $("fCoupon").checked = true;
+    render();
+    st.style.color = "#2f7d78"; st.textContent = `Using ${pick.code}. It gets marked as handed out when you email the receipt, or click "Mark code as handed out".`;
+  }
+
   async function sendEmail() {
     const st = $("emailStatus");
     const to = $("fEmail").value.trim();
@@ -413,7 +450,8 @@
         message_html: emailHtml(link),
         name: "Vintage Play Collectables",
       });
-      st.style.color = "#2f7d78"; st.textContent = `Sent to ${to}. A copy also shows in your Yahoo Sent folder.`;
+      const marked = $("fCoupon").checked ? await markHandedOut(true) : false;
+      st.style.color = "#2f7d78"; st.textContent = `Sent to ${to}. A copy also shows in your Yahoo Sent folder.` + (marked ? ` Coupon ${$("fCode").value.trim().toUpperCase()} is marked as handed out.` : "");
     } catch (e) {
       st.style.color = "#c2452f"; st.textContent = `Couldn't send: ${(e && (e.text || e.message)) || "unknown error"}. You can still use Download PDF and send it yourself.`;
     } finally { $("emailBtn").disabled = false; }
@@ -528,6 +566,8 @@
     document.querySelectorAll(".panel input, .panel select").forEach((el) => { el.addEventListener("input", render); el.addEventListener("change", render); });
     $("addLine").addEventListener("click", () => { addLine(); render(); });
     $("emailBtn").addEventListener("click", sendEmail);
+    $("nextCodeBtn").addEventListener("click", useNextCode);
+    $("markGivenBtn").addEventListener("click", () => markHandedOut(false));
     $("pdfBtn").addEventListener("click", () => savePdf("emailStatus"));
     try { emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY }); } catch (e) { /* email stays unavailable */ }
     $("fContact").addEventListener("input", () => { if (!$("fEmail").value && $("fContact").value.includes("@")) $("fEmail").value = $("fContact").value.trim(); });
