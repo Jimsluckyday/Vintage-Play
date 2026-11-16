@@ -141,10 +141,11 @@
       <p class="hint">Built from the order list: orders from the same email (or the same name, when there's no email) are added up. <strong>Spent</strong> counts orders you've marked <em>Fulfilled</em> (paid and done); <strong>Open</strong> is New/Contacted orders still waiting. Cancelled orders are ignored. Sales made outside the site (Kijiji, in person) only show here if they came in as an order.</p>
       <details id="offlineSaleBox" style="margin:0.5rem 0 0.9rem;">
         <summary style="cursor:pointer;font-weight:700;">+ Log an offline sale (Kijiji, eBay, Facebook, in person...)</summary>
-        <p class="hint">Records the sale, takes the item out of stock and adds the buyer to this list. Name and contact are optional: a one-time Kijiji buyer can be just "Kijiji buyer".</p>
+        <p class="hint">Records the sale, takes the item out of stock and adds the buyer to this list. Name and contact are optional: a one-time Kijiji buyer can be just "Kijiji buyer". Use this any time something has to come off the site, whether it sold, or you are taking it out and counting it as a sale. Cost each is the real cost when the item has one, otherwise 25% of its price (your rule for anything bought before the site); you can change it per line.</p>
         <div style="display:flex;flex-wrap:wrap;gap:0.75rem;">
           <div><label for="osName">Customer name</label><input type="text" id="osName" style="max-width:14rem;" /></div>
           <div><label for="osContact">Email or phone</label><input type="text" id="osContact" style="max-width:14rem;" /></div>
+          <div><label for="osDate">Date sold</label><input type="date" id="osDate" style="max-width:11rem;" /></div>
           <div><label for="osChannel">Where did it sell?</label>
             <select id="osChannel" style="max-width:14rem;"><option>Kijiji</option><option>Facebook Marketplace</option><option>eBay</option><option>In Person</option><option>Other</option></select></div>
         </div>
@@ -347,6 +348,7 @@
         </span>
         <button type="button" class="btn secondary" id="reportExportBtn">Download sales workbook (Excel)</button>
       </div>
+      <div id="hstWatch" style="margin:0.5rem 0 1rem;"></div>
       <p class="hint" id="reportPeriodNote" style="font-weight:700;"></p>
       <div class="stat-grid" id="reportStatGrid"></div>
       <h3 style="margin-top:1.25rem;">By Month</h3>
@@ -1421,7 +1423,7 @@
         .map((x) => {
           const qty = Number(x.quantity) || 0, price = Number(x.price_each) || 0;
           const hasCost = x.cost_basis_each !== null && x.cost_basis_each !== undefined;
-          const cost = hasCost ? Number(x.cost_basis_each) : 0;
+          const cost = hasCost ? Number(x.cost_basis_each) : Math.round(price * 25) / 100; // no cost on the sale: the 25% rule
           return { when: new Date(x.sold_at), title: x.title || "", category: categoryLabel(x.category) || "(none)", channel: x.channel || "(not noted)", qty, price,
             revenue: qty * price, cost: qty * cost, hasCost, unitCost: cost, customer: x.customer_name || "", contact: x.customer_contact || "" };
         })
@@ -1458,7 +1460,7 @@
         stat("Revenue", usd(revenue)) + stat("Cost of items sold", usd(cost)) + stat("Profit", usd(profit)) +
         stat("Margin", revenue > 0 ? `${((profit / revenue) * 100).toFixed(0)}%` : "-") +
         stat("Units sold", units) + stat("Average sale", rows.length ? usd(revenue / rows.length) : "-") +
-        (missing ? stat("Sales with no cost recorded", missing) : "");
+        (missing ? stat("Sales costed at the 25% rule", missing) : "");
       const table = (id, head, groups, labelFn) => {
         const body = groups.map((g) => `<tr><td>${escapeHtml(labelFn(g))}</td><td>${g.qty}</td><td>${money(g.revenue)}</td><td>${money(g.cost)}</td><td>${money(g.revenue - g.cost)}</td></tr>`).join("");
         const total = `<tr class="summary-total-row"><td>Total</td><td>${units}</td><td>${money(revenue)}</td><td>${money(cost)}</td><td>${money(profit)}</td></tr>`;
@@ -1469,7 +1471,44 @@
         (g) => new Date(`${g.key}-01T12:00:00`).toLocaleDateString("en-CA", { month: "long", year: "numeric" }));
       table("reportCategoryTable", "Category", reportGroup(rows, (r) => r.category).sort((a, b) => b.revenue - a.revenue), (g) => g.key);
       table("reportChannelTable", "Where it sold", reportGroup(rows, (r) => r.channel).sort((a, b) => b.revenue - a.revenue), (g) => g.key);
+      renderHstWatch();
       table("reportTopTable", "Item", reportGroup(rows, (r) => r.title).sort((a, b) => b.revenue - a.revenue).slice(0, 15), (g) => g.key);
+    }
+
+    // ---- GST/HST small-supplier watch: sales revenue per calendar quarter vs the $30,000 limit ----
+    // The rule as understood: a small supplier must register and start charging once total sales pass $30,000 in a single calendar
+    // quarter, or across the last four calendar quarters in a row. Confirm the exact rules with the CRA or your accountant.
+    const SMALL_SUPPLIER_LIMIT = 30000;
+    function renderHstWatch() {
+      const box = document.getElementById("hstWatch");
+      if (!box) return;
+      const qIndex = (d) => d.getFullYear() * 4 + Math.floor(d.getMonth() / 3);
+      const qLabel = (idx) => { const y = Math.floor(idx / 4), q = idx % 4; return `${["Jan-Mar", "Apr-Jun", "Jul-Sep", "Oct-Dec"][q]} ${y}`; };
+      const byQ = new Map();
+      sales.forEach((x) => { const k = qIndex(new Date(x.sold_at)); byQ.set(k, (byQ.get(k) || 0) + (Number(x.quantity) || 0) * (Number(x.price_each) || 0)); });
+      const cur = qIndex(new Date());
+      const curRev = byQ.get(cur) || 0;
+      let roll = 0; for (let k = cur - 3; k <= cur; k++) roll += byQ.get(k) || 0;
+      const worst = Math.max(curRev, roll) / SMALL_SUPPLIER_LIMIT;
+      const usd = (n) => `$${n.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const colour = (r) => (r >= 1 ? "#c2452f" : r >= 0.7 ? "#d68910" : "#2f7d78");
+      const bar = (label, amt) => {
+        const r = amt / SMALL_SUPPLIER_LIMIT;
+        return `<div style="margin:0.35rem 0;"><div style="display:flex;justify-content:space-between;font-weight:700;font-size:0.9rem;"><span>${label}</span><span>${usd(amt)} of ${usd(SMALL_SUPPLIER_LIMIT)} (${(r * 100).toFixed(1)}%)</span></div>
+          <div style="background:#e6dccb;border-radius:6px;height:12px;overflow:hidden;"><div style="width:${Math.min(100, r * 100).toFixed(1)}%;height:100%;background:${colour(r)};"></div></div></div>`;
+      };
+      const msg = worst >= 1 ? `You are OVER ${usd(SMALL_SUPPLIER_LIMIT)}. Talk to the CRA or your accountant right away about registering for GST/HST: the rule is that you start charging tax from the sale that put you over.`
+        : worst >= 0.9 ? "Very close to the limit. Talk to your accountant now about registering."
+        : worst >= 0.7 ? "Getting closer to the limit. Keep an eye on this and plan ahead."
+        : "Well under the limit. No tax to collect yet.";
+      const rows = []; for (let k = cur; k > cur - 8; k--) rows.push(`<tr><td>${qLabel(k)}</td><td>${usd(byQ.get(k) || 0)}</td></tr>`);
+      box.innerHTML = `<div class="hint" style="border:1px solid #cfc6b8;border-radius:8px;padding:0.7rem 0.9rem;background:#fffaf0;">
+        <strong style="font-size:1rem;">Tax watch: $30,000 small-supplier limit</strong>
+        ${bar(`This quarter (${qLabel(cur)})`, curRev)}
+        ${bar("Last four quarters in a row", roll)}
+        <div style="font-weight:800;margin:0.4rem 0;color:${colour(worst)};">${msg}</div>
+        <details><summary style="cursor:pointer;">Revenue by quarter (last 8)</summary><table class="summary-table" style="margin-top:0.4rem;"><tr><th>Quarter</th><th>Sales revenue</th></tr>${rows.join("")}</table></details>
+        <div style="margin-top:0.4rem;">Counts the price you actually charged on every recorded sale (before expenses), not profit. It only sees sales that have been recorded, so keep recording them. Check the exact rule and what counts with the CRA or your accountant.</div></div>`;
     }
 
     function exportSalesWorkbook() {
@@ -1491,7 +1530,7 @@
         ["Vintage Play Collectables - sales report"], ["Period", label], ["Created", new Date().toLocaleDateString("en-CA")],
         ["Prices are what each item actually sold for (CAD). HST is not included or calculated here; every sale is listed on the 'Sales detail' tab with its date."], [],
         ["Sales recorded", rows.length], ["Units sold", rows.reduce((t, r) => t + r.qty, 0)], ["Revenue", revenue], ["Cost of items sold", cost], ["Profit", revenue - cost],
-        ["Sales with no cost recorded (profit overstated)", rows.filter((r) => !r.hasCost).length], [],
+        ["Sales costed at the 25% rule (no real cost on file)", rows.filter((r) => !r.hasCost).length], [],
         ...grp("By month", monthKey, (a, b) => a.key.localeCompare(b.key)), [],
         ...grp("By category", (r) => r.category, (a, b) => b.revenue - a.revenue), [],
         ...grp("By where it sold", (r) => r.channel, (a, b) => b.revenue - a.revenue),
@@ -1500,10 +1539,10 @@
       // the single-value rows (Revenue/Cost/Profit) hold their number in column B, so format those cells too
       [7, 8, 9].forEach((r) => { const c = wsSum[XLSX.utils.encode_cell({ r, c: 1 })]; if (c) c.z = cur; });
       XLSX.utils.book_append_sheet(wb, wsSum, "Summary");
-      const detail = [["Date", "Item", "Category", "Where it sold", "Qty", "Price each", "Line total", "Cost each", "Line cost", "Profit", "Customer", "Contact"],
-        ...rows.map((r) => [r.when.toLocaleDateString("en-CA"), r.title, r.category, r.channel, r.qty, r.price, r.revenue, r.hasCost ? r.unitCost : "", r.cost, r.revenue - r.cost, r.customer, r.contact]),
-        ["TOTAL", "", "", "", rows.reduce((t, r) => t + r.qty, 0), "", revenue, "", cost, revenue - cost, "", ""]];
-      const wsDet = sheet(detail, [12, 54, 22, 20, 6, 12, 12, 12, 12, 12, 22, 26], [5, 6, 7, 8, 9], 1);
+      const detail = [["Date", "Item", "Category", "Where it sold", "Qty", "Price each", "Line total", "Cost each", "Line cost", "Profit", "Customer", "Contact", "Cost type"],
+        ...rows.map((r) => [r.when.toLocaleDateString("en-CA"), r.title, r.category, r.channel, r.qty, r.price, r.revenue, r.unitCost, r.cost, r.revenue - r.cost, r.customer, r.contact, r.hasCost ? "Recorded cost" : "25% rule"]),
+        ["TOTAL", "", "", "", rows.reduce((t, r) => t + r.qty, 0), "", revenue, "", cost, revenue - cost, "", "", ""]];
+      const wsDet = sheet(detail, [12, 54, 22, 20, 6, 12, 12, 12, 12, 12, 22, 26, 14], [5, 6, 7, 8, 9], 1);
       wsDet["!freeze"] = { xSplit: 0, ySplit: 1 };
       XLSX.utils.book_append_sheet(wb, wsDet, "Sales detail");
       const top = [["Item", "Sales", "Units", "Revenue", "Cost", "Profit"], ...reportGroup(rows, (r) => r.title).sort((a, b) => b.revenue - a.revenue).map((g) => [g.key, g.sales, g.qty, g.revenue, g.cost, g.revenue - g.cost])];
@@ -1545,14 +1584,23 @@
       return await supabaseClient.from("sales").insert(row);
     }
 
+    // Cost used for a sale: the item's real cost when it has one, otherwise the standing 25%-of-price rule (for stock bought
+    // before this site existed, which is what is recorded for tax purposes).
+    function saleCost(item) {
+      if (item.cost_basis !== null && item.cost_basis !== undefined && item.cost_basis !== "") return Number(item.cost_basis);
+      return Math.round((Number(item.asking_price) || 0) * 25) / 100;
+    }
+
     // Records each planned line as a sale (one sales row) and takes the quantity out of stock; the last unit marks the listing sold.
-    async function applyPlan(plan, channel, who) {
+    async function applyPlan(plan, channel, who, soldAt) {
       const done = [];
       for (const x of plan) {
-        const { error: saleError } = await insertSale({
+        const saleRow = {
           item_id: x.item.id, title: x.item.title, category: x.item.category, quantity: x.qty,
-          price_each: x.price, cost_basis_each: x.item.cost_basis, channel,
-        }, who);
+          price_each: x.price, cost_basis_each: x.cost !== undefined ? x.cost : saleCost(x.item), channel,
+        };
+        if (soldAt) saleRow.sold_at = soldAt;
+        const { error: saleError } = await insertSale(saleRow, who);
         if (saleError) {
           alert(`Couldn't record the sale of "${x.item.title}": ${saleError.message}\n\n` + (done.length ? `Already recorded before the error (do NOT redo these): ${done.join(", ")}` : "Nothing was changed."));
           return { ok: false, done };
@@ -1685,10 +1733,12 @@
           <span style="flex:1;min-width:12rem;font-weight:700;">${escapeHtml(l.item.title)} <span class="meta">(${Number(l.item.quantity)} in stock)</span></span>
           <label style="margin:0;">Qty <input type="number" min="1" max="${Number(l.item.quantity)}" step="1" value="${l.qty}" data-os-qty="${i}" style="width:5rem;display:inline-block;" /></label>
           <label style="margin:0;">Price each $ <input type="number" min="0" step="0.01" value="${l.price.toFixed(2)}" data-os-price="${i}" style="width:7rem;display:inline-block;" /></label>
+          <label style="margin:0;">Cost each $ <input type="number" min="0" step="0.01" value="${l.cost.toFixed(2)}" data-os-cost="${i}" style="width:7rem;display:inline-block;" />${l.item.cost_basis === null || l.item.cost_basis === undefined ? ` <span class="meta">(25% rule)</span>` : ""}</label>
           <button type="button" class="btn danger" data-os-remove="${i}">Remove</button></div>`).join("") + `<p class="hint" style="font-weight:700;">Total ${money(total)}</p>`;
     }
     document.getElementById("osLines").addEventListener("input", (e) => {
-      const q = e.target.dataset.osQty, pr = e.target.dataset.osPrice;
+      const q = e.target.dataset.osQty, pr = e.target.dataset.osPrice, co = e.target.dataset.osCost;
+      if (co !== undefined) osLines[Number(co)].cost = Math.max(0, Number(e.target.value) || 0);
       if (q !== undefined) osLines[Number(q)].qty = Math.max(1, Math.round(Number(e.target.value)) || 1);
       if (pr !== undefined) osLines[Number(pr)].price = Math.max(0, Number(e.target.value) || 0);
     });
@@ -1713,11 +1763,12 @@
       if (!item) return;
       const existing = osLines.find((l) => l.item.id === item.id);
       if (existing) existing.qty = Math.min(existing.qty + 1, Number(item.quantity));
-      else osLines.push({ item, qty: 1, price: Number(item.asking_price) || 0 });
+      else osLines.push({ item, qty: 1, price: Number(item.asking_price) || 0, cost: saleCost(item) });
       document.getElementById("osSearch").value = "";
       document.getElementById("osMatches").innerHTML = "";
       osRender();
     });
+    document.getElementById("osDate").value = new Date().toISOString().slice(0, 10);
     document.getElementById("osRecordBtn").addEventListener("click", async () => {
       const err = document.getElementById("osError");
       err.hidden = true;
@@ -1725,18 +1776,20 @@
       const name = document.getElementById("osName").value.trim();
       const contact = document.getElementById("osContact").value.trim();
       const channel = document.getElementById("osChannel").value;
-      const plan = osLines.map((l) => ({ item: l.item, qty: Math.min(l.qty, Number(l.item.quantity)), price: l.price }));
+      const plan = osLines.map((l) => ({ item: l.item, qty: Math.min(l.qty, Number(l.item.quantity)), price: l.price, cost: l.cost }));
+      const dateVal = document.getElementById("osDate").value;
+      const soldAt = dateVal ? new Date(`${dateVal}T12:00:00`).toISOString() : null;
       const total = plan.reduce((t, x) => t + x.qty * x.price, 0);
-      const msg = `Record this sale via ${channel}${name || contact ? ` for ${name || contact}` : ""}?\n\n` +
-        plan.map((x) => `${x.qty} x ${x.item.title} @ $${x.price.toFixed(2)}` + (Number(x.item.quantity) - x.qty > 0 ? ` (${Number(x.item.quantity) - x.qty} stay in stock)` : " (listing marked sold)")).join("\n") +
+      const msg = `Record this sale via ${channel}${name || contact ? ` for ${name || contact}` : ""}${dateVal ? ` on ${dateVal}` : ""}?\n\n` +
+        plan.map((x) => `${x.qty} x ${x.item.title} @ $${x.price.toFixed(2)} (cost $${x.cost.toFixed(2)} each)` + (Number(x.item.quantity) - x.qty > 0 ? ` (${Number(x.item.quantity) - x.qty} stay in stock)` : " (listing marked sold)")).join("\n") +
         `\n\nTotal $${total.toFixed(2)}`;
       if (!confirm(msg)) return;
-      const res = await applyPlan(plan, channel, { name, contact });
+      const res = await applyPlan(plan, channel, { name, contact }, soldAt);
       await loadSales();
       await loadItems();
       if (!res.ok) return;
       osLines = []; osRender();
-      document.getElementById("osName").value = ""; document.getElementById("osContact").value = "";
+      document.getElementById("osName").value = ""; document.getElementById("osContact").value = ""; document.getElementById("osDate").value = new Date().toISOString().slice(0, 10);
       document.getElementById("offlineSaleBox").open = false;
     });
 
@@ -3301,7 +3354,7 @@
         category: item.category,
         quantity: qty,
         price_each: price,
-        cost_basis_each: item.cost_basis,
+        cost_basis_each: saleCost(item),
         channel: channel.trim() || null,
       }, who);
       if (saleError) {
