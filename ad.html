@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Ad maker | Vintage Play Collectables</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Bangers&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="/config.js"></script>
+  <style>
+    /* Ad maker: builds a scroll-stopping picture for Instagram / Facebook / Marketplace. No prices anywhere (owner's rule). */
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Nunito', system-ui, sans-serif; background: #f4f4f4; color: #111; }
+    header.bar { background: #111; color: #fff; padding: 0.8rem 1rem; display: flex; gap: 0.8rem; align-items: baseline; flex-wrap: wrap; }
+    header.bar h1 { margin: 0; font-family: 'Bangers', cursive; font-weight: 400; letter-spacing: 0.04em; font-size: 1.6rem; color: #ffd21f; }
+    header.bar span { color: #cfcfcf; font-size: 0.9rem; }
+    main { display: grid; gap: 1.2rem; padding: 1rem; max-width: 1180px; margin: 0 auto; grid-template-columns: minmax(0, 1fr); }
+    @media (min-width: 900px) { main { grid-template-columns: minmax(0, 460px) minmax(0, 1fr); align-items: start; } }
+    .stage { background: #fff; border: 2px solid #111; border-radius: 10px; padding: 0.7rem; position: sticky; top: 0.6rem; }
+    .stage canvas { display: block; width: 100%; height: auto; background: #fff; border: 1px solid #ddd; }
+    .panel { background: #fff; border: 2px solid #111; border-radius: 10px; padding: 1rem; display: grid; gap: 1.1rem; }
+    h2 { margin: 0 0 0.4rem; font-size: 0.95rem; letter-spacing: 0.05em; text-transform: uppercase; }
+    .row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    button, select, input[type=text], textarea { font: inherit; }
+    button { cursor: pointer; border: 2px solid #111; background: #fff; border-radius: 8px; padding: 0.4rem 0.8rem; font-weight: 800; }
+    button:hover { background: #ffd21f; }
+    button.on { background: #111; color: #fff; }
+    button.big { background: #ffd21f; font-size: 1.05rem; padding: 0.65rem 1.1rem; }
+    button.big:hover { background: #ffe25a; }
+    input[type=text], select, textarea { width: 100%; border: 2px solid #111; border-radius: 8px; padding: 0.45rem 0.6rem; background: #fff; }
+    textarea { min-height: 130px; resize: vertical; }
+    :focus-visible { outline: 3px solid #2f7d78; outline-offset: 2px; }
+    .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 0.4rem; }
+    .thumb { position: relative; aspect-ratio: 1/1; border: 2px solid #111; border-radius: 8px; overflow: hidden; padding: 0; background: #eee; }
+    .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .thumb .n { position: absolute; left: 3px; top: 3px; background: #ffd21f; border: 2px solid #111; border-radius: 6px; font-size: 0.7rem; padding: 0 0.3rem; }
+    .thumb .x { position: absolute; right: 3px; top: 3px; background: #111; color: #fff; border-radius: 6px; font-size: 0.75rem; padding: 0 0.35rem; }
+    .hint { color: #555; font-size: 0.85rem; margin: 0.2rem 0 0; }
+    .status { min-height: 1.2rem; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <header class="bar"><h1>Ad maker</h1><span>Pictures only, no prices. Pick a size, tweak the words, download the picture, then post it with the caption below.</span></header>
+  <main>
+    <div class="stage">
+      <canvas id="cv" width="1080" height="1350" aria-label="Advertisement preview"></canvas>
+      <p class="hint" id="fmtHint"></p>
+    </div>
+
+    <div class="panel">
+      <div>
+        <h2>1. Size</h2>
+        <div class="row" id="fmtRow">
+          <button type="button" data-fmt="portrait" class="on">Feed post (4:5)</button>
+          <button type="button" data-fmt="square">Square</button>
+          <button type="button" data-fmt="story">Story / Reel (9:16)</button>
+        </div>
+        <p class="hint">Feed uses the first 6 pictures, square 3, story 9.</p>
+      </div>
+
+      <div>
+        <h2>2. Words</h2>
+        <select id="headSel" aria-label="Headline"></select>
+        <input type="text" id="headCustom" placeholder="Or type your own headline" style="margin-top:0.4rem;" />
+        <input type="text" id="subText" value="Retro games &bull; Comics &bull; Toys &bull; Collectibles" style="margin-top:0.4rem;" aria-label="Line under the pictures" />
+      </div>
+
+      <div>
+        <h2>3. Pictures <span id="selCount" style="font-weight:400;text-transform:none;"></span></h2>
+        <div class="row"><button type="button" id="shuffleBtn">Shuffle picks</button><button type="button" id="clearBtn">Clear</button></div>
+        <div class="thumbs" id="selThumbs" style="margin-top:0.5rem;"></div>
+        <input type="text" id="findBox" placeholder="Search to add a picture (Mario, Batman, Pokemon...)" style="margin-top:0.6rem;" />
+        <div class="thumbs" id="findThumbs" style="margin-top:0.5rem;"></div>
+        <p class="hint" id="findHint">Click a picture to add it. The first ones in the list are used first.</p>
+      </div>
+
+      <div>
+        <h2>4. Download</h2>
+        <button type="button" class="big" id="dlBtn">Download picture (PNG)</button>
+        <p class="status" id="status"></p>
+      </div>
+
+      <div>
+        <h2>5. Caption to paste with it</h2>
+        <textarea id="caption"></textarea>
+        <div class="row" style="margin-top:0.4rem;"><button type="button" id="copyCap">Copy caption</button></div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const W = 1080;
+    const FORMATS = {
+      portrait: { H: 1350, band: 270, logoH: 232, headFont: 112, rows: 2, label: "Feed post, 1080 x 1350" },
+      square:   { H: 1080, band: 230, logoH: 196, headFont: 92,  rows: 1, label: "Square, 1080 x 1080" },
+      story:    { H: 1920, band: 340, logoH: 300, headFont: 130, rows: 3, label: "Story / Reel, 1080 x 1920" },
+    };
+    const HEADLINES = ["REMEMBER THESE?", "YOUR CHILDHOOD IS FOR SALE", "FOUND YOUR FAVOURITE?", "LEVEL UP YOUR SHELF", "RETRO FINDS, DELIVERED"];
+    const SITE = (typeof SITE_URL === "string" && SITE_URL) ? SITE_URL.replace(/\/+$/, "") : "https://www.vintageplay.ca";
+    const SITE_SHORT = SITE.replace(/^https?:\/\/(www\.)?/, "");
+    const YELLOW = "#ffd21f", RED = "#e4202d", INK = "#111";
+    const HOT = [/mario/i, /zelda/i, /sonic/i, /pok[eé]mon|pikachu/i, /star ?fox/i, /donkey kong/i, /metroid/i, /pac-?man/i, /batman/i, /spider-?man/i, /x-?men/i,
+      /transformers|optimus/i, /star wars/i, /skylanders/i, /simpsons/i, /mickey/i, /tetris/i, /mega ?man/i, /street fighter/i, /mortal kombat/i, /tony hawk/i,
+      /turtles/i, /godzilla/i, /disney/i, /halo/i, /lego/i, /nintendo|game ?boy|atari|genesis|dreamcast|playstation|xbox/i];
+
+    const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+    let fmt = "portrait", all = [], selected = [], logoImg = null, imgCache = new Map();
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+    // photos on img.vintageplay.ca are also served from this site at /img/<name>, which keeps the canvas exportable
+    function photoSrc(u) {
+      const m = /^https?:\/\/img\.vintageplay\.ca\/(.+)$/.exec(u || "");
+      if (m && !/^(localhost|127\.)/.test(location.hostname)) return "/img/" + m[1];
+      return u;
+    }
+    function loadImage(src) {
+      if (imgCache.has(src)) return imgCache.get(src);
+      const p = new Promise((res) => {
+        const im = new Image(); im.crossOrigin = "anonymous";
+        im.onload = () => res(im); im.onerror = () => res(null); im.src = src;
+      });
+      imgCache.set(src, p); return p;
+    }
+
+    // ---------- drawing ----------
+    function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+    function wrapLines(g, text, maxW) {
+      const words = text.split(/\s+/).filter(Boolean), lines = []; let cur = "";
+      for (const w of words) { const t = cur ? cur + " " + w : w; if (g.measureText(t).width <= maxW || !cur) cur = t; else { lines.push(cur); cur = w; } }
+      if (cur) lines.push(cur); return lines;
+    }
+    function fitHeadline(g, text, maxW, maxH, startSize) {
+      for (let s = startSize; s >= 40; s -= 4) {
+        g.font = `${s}px Bangers`; const lines = wrapLines(g, text, maxW);
+        if (lines.length <= 3 && lines.length * s * 0.98 <= maxH && lines.every((l) => g.measureText(l).width <= maxW)) return { s, lines };
+      }
+      g.font = "40px Bangers"; return { s: 40, lines: wrapLines(g, text, maxW) };
+    }
+    function fitOne(g, text, font, maxW, startSize) {
+      let s = startSize; do { g.font = font.replace("{s}", s); if (g.measureText(text).width <= maxW) break; s -= 2; } while (s > 14); return s;
+    }
+    function star(g, cx, cy, ro, ri, pts) {
+      g.beginPath();
+      for (let i = 0; i < pts * 2; i++) { const a = (Math.PI / pts) * i - Math.PI / 2, r = i % 2 ? ri : ro; g.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); }
+      g.closePath();
+    }
+    function qrDraw(g, text, x, y, size) {
+      const qr = qrcode(0, "M"); qr.addData(text); qr.make();
+      const n = qr.getModuleCount(), cell = size / n; g.fillStyle = "#000";
+      for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) g.fillRect(Math.round(x + c * cell), Math.round(y + r * cell), Math.ceil(cell), Math.ceil(cell));
+    }
+    function drawCover(g, im, x, y, s) {
+      const r = Math.max(s / im.width, s / im.height), w = im.width * r, h = im.height * r;
+      g.drawImage(im, x + (s - w) / 2, y + (s - h) / 2, w, h);
+    }
+
+    async function render() {
+      const F = FORMATS[fmt], H = F.H; cv.height = H;
+      await Promise.all([document.fonts.load("100px Bangers"), document.fonts.load('60px "Alfa Slab One"'), document.fonts.load("800 30px Nunito")]);
+      const g = ctx; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
+      g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+
+      // black band: logo + headline
+      g.fillStyle = INK; g.fillRect(0, 0, W, F.band);
+      g.fillStyle = YELLOW; g.fillRect(0, F.band, W, 10);
+      if (!logoImg) logoImg = await loadImage("/logo.png");
+      let lx = 40;
+      if (logoImg) { const lh = F.logoH, lw = lh * logoImg.width / logoImg.height, ly = (F.band - lh) / 2; g.drawImage(logoImg, lx, ly, lw, lh); lx += lw + 36; }
+      const headText = ($("headCustom").value.trim() || $("headSel").value).toUpperCase();
+      const hx = lx, hw = W - 40 - hx, fit = fitHeadline(g, headText, hw, F.band - 50, F.headFont);
+      g.textBaseline = "alphabetic"; g.textAlign = "left";
+      const lineH = fit.s * 0.98, total = lineH * fit.lines.length; let by = (F.band - total) / 2 + fit.s * 0.82;
+      fit.lines.forEach((ln, i) => { g.font = `${fit.s}px Bangers`; g.fillStyle = (fit.lines.length > 1 && i === fit.lines.length - 1) ? YELLOW : "#fff"; g.fillText(ln, hx, by); by += lineH; });
+
+      // pictures
+      const cols = 3, gap = 26, tile = 316, rows = F.rows, mTop = F.band + (fmt === "story" ? 50 : 40);
+      const want = cols * rows, use = selected.slice(0, want);
+      const imgs = await Promise.all(use.map((it) => loadImage(photoSrc(it.photo_urls[0]))));
+      const tilts = [-1.8, 1.4, -1.0, 1.6, -1.4, 1.0, -0.8, 1.8, -1.6];
+      for (let i = 0; i < want; i++) {
+        const c = i % cols, r = Math.floor(i / cols), x = 40 + c * (tile + gap), y = mTop + r * (tile + gap);
+        g.save(); g.translate(x + tile / 2, y + tile / 2); g.rotate((tilts[i] * Math.PI) / 180); g.translate(-tile / 2, -tile / 2);
+        g.fillStyle = INK; rr(g, 9, 9, tile, tile, 12); g.fill();
+        g.save(); rr(g, 0, 0, tile, tile, 12); g.clip(); g.fillStyle = "#eee"; g.fillRect(0, 0, tile, tile);
+        if (imgs[i]) drawCover(g, imgs[i], 0, 0, tile); g.restore();
+        g.lineWidth = 7; g.strokeStyle = INK; rr(g, 0, 0, tile, tile, 12); g.stroke(); g.restore();
+      }
+      const mBottom = mTop + rows * tile + (rows - 1) * gap;
+
+      // line under the pictures
+      const sub = $("subText").value.trim().toUpperCase(), sBase = mBottom + 66;
+      if (sub) {
+        const sz = fitOne(g, sub, "{s}px Bangers", W - 120, 58); g.font = `${sz}px Bangers`; g.textAlign = "center";
+        const tw = g.measureText(sub).width;
+        g.save(); g.translate(W / 2, sBase); g.rotate(-0.01); g.fillStyle = YELLOW; g.fillRect(-tw / 2 - 18, -sz * 0.78, tw + 36, sz * 1.05); g.fillStyle = INK; g.fillText(sub, 0, 0); g.restore();
+      }
+
+      // QR card + call to action
+      const bTop = sBase + 44, bBot = H - 40, cardS = Math.min(380, bBot - bTop), cardX = 40, cardY = bTop + (bBot - bTop - cardS) / 2;
+      g.fillStyle = INK; rr(g, cardX + 8, cardY + 8, cardS, cardS, 18); g.fill();
+      g.fillStyle = "#fff"; rr(g, cardX, cardY, cardS, cardS, 18); g.fill(); g.lineWidth = 7; g.strokeStyle = INK; g.stroke();
+      const pad = Math.round(cardS * 0.07); qrDraw(g, SITE + "/", cardX + pad, cardY + pad, cardS - pad * 2);
+      g.save(); g.translate(cardX + cardS - 8, cardY + cardS - 14); g.rotate(-0.2); star(g, 0, 0, 56, 38, 12); g.fillStyle = YELLOW; g.fill(); g.lineWidth = 5; g.strokeStyle = INK; g.stroke();
+      g.fillStyle = INK; g.font = "27px Bangers"; g.textAlign = "center"; g.fillText("SCAN", 0, -1); g.fillText("ME!", 0, 25); g.restore();
+
+      const tx = cardX + cardS + 44, tw2 = W - 40 - tx; g.textAlign = "left";
+      const l1 = fitOne(g, "SCAN TO SHOP", '{s}px "Alfa Slab One"', tw2, 70), l2 = fitOne(g, SITE_SHORT, '{s}px "Alfa Slab One"', tw2, 60);
+      const midY = cardY + cardS / 2; g.fillStyle = INK; g.font = `${l1}px "Alfa Slab One"`; g.fillText("SCAN TO SHOP", tx, midY - 20);
+      g.fillStyle = RED; g.font = `${l2}px "Alfa Slab One"`; g.fillText(SITE_SHORT, tx, midY + l2 + 4);
+      const s3 = fitOne(g, "Brampton, ON  •  Shipping across Canada", "800 {s}px Nunito", tw2, 30); g.fillStyle = "#444"; g.font = `800 ${s3}px Nunito`;
+      g.fillText("Brampton, ON  •  Shipping across Canada", tx, midY + l2 + 4 + s3 + 18);
+      $("fmtHint").textContent = F.label + " • uses " + Math.min(want, selected.length) + " of " + want + " picture spots";
+    }
+
+    // ---------- items + auto picks ----------
+    async function loadAll() {
+      let off = 0, rows = [];
+      while (true) {
+        const { data, error } = await supabaseClient.from("items").select("id, title, category, brand, photo_urls, featured_at")
+          .neq("status", "sold").is("on_hold_at", null).order("id", { ascending: true }).range(off, off + 999);
+        if (error || !data) break; rows = rows.concat(data); if (data.length < 1000) break; off += 1000;
+      }
+      const seen = new Set(); all = [];
+      for (const it of rows) {
+        if (!Array.isArray(it.photo_urls) || !it.photo_urls.length) continue;
+        const k = (it.title || "").toLowerCase(); if (seen.has(k)) continue; seen.add(k); all.push(it);
+      }
+    }
+    function autoPick() {
+      const picks = [], used = new Set(), perCat = {};
+      const take = (it) => { picks.push(it); used.add(it.id); perCat[it.category] = (perCat[it.category] || 0) + 1; };
+      const order = HOT.map((r) => ({ r, k: Math.random() })).sort((a, b) => a.k - b.k).map((x) => x.r);
+      for (const r of order) {
+        if (picks.length >= 9) break;
+        const m = all.filter((it) => !used.has(it.id) && r.test(it.title) && (perCat[it.category] || 0) < 3);
+        if (m.length) take(m[Math.floor(Math.random() * m.length)]);
+      }
+      const rest = all.filter((it) => !used.has(it.id) && it.featured_at).sort(() => Math.random() - 0.5);
+      for (const it of rest) { if (picks.length >= 9) break; take(it); }
+      selected = picks;
+    }
+    function thumbBtn(it, extra) { return `<button type="button" class="thumb" data-id="${esc(it.id)}" title="${esc(it.title)}"><img src="${esc(photoSrc(it.photo_urls[0]) === it.photo_urls[0] ? it.photo_urls[0] : it.photo_urls[0])}" alt="${esc(it.title)}" loading="lazy" />${extra || ""}</button>`; }
+    function drawLists() {
+      $("selCount").textContent = "(" + selected.length + " of 9)";
+      $("selThumbs").innerHTML = selected.map((it, i) => thumbBtn(it, `<span class="n">${i + 1}</span><span class="x">&times;</span>`)).join("");
+      const q = $("findBox").value.trim().toLowerCase(), have = new Set(selected.map((s) => s.id));
+      const res = q ? all.filter((it) => !have.has(it.id) && it.title.toLowerCase().includes(q)).slice(0, 24) : [];
+      $("findThumbs").innerHTML = res.map((it) => thumbBtn(it)).join("");
+      $("findHint").textContent = q ? (res.length ? "Click a picture to add it." : "No pictures found for that.") : "Type a name above to find more pictures. The first ones in the list are used first.";
+    }
+    function refresh() { drawLists(); render(); }
+
+    // ---------- caption ----------
+    function captionText() {
+      return `Remember these? Retro video games, comics, toys and collectibles, hand-picked in Brampton, ON and shipped across Canada. New finds added all the time!\n\nTap the link in our bio or visit ${SITE_SHORT} to see everything we have in stock. Message us any time, bundle deals welcome.\n\n#retrogaming #vintagegames #nintendo #sega #playstation #comicbooks #vintagetoys #transformers #collectibles #retrocollector #brampton #ontario`;
+    }
+
+    // ---------- wiring ----------
+    HEADLINES.forEach((h) => { const o = document.createElement("option"); o.value = h; o.textContent = h; $("headSel").appendChild(o); });
+    $("caption").value = captionText();
+    document.querySelectorAll("#fmtRow button").forEach((b) => b.addEventListener("click", () => {
+      fmt = b.dataset.fmt; document.querySelectorAll("#fmtRow button").forEach((x) => x.classList.toggle("on", x === b)); render();
+    }));
+    ["headSel", "headCustom", "subText"].forEach((id) => $(id).addEventListener("input", render));
+    $("findBox").addEventListener("input", drawLists);
+    $("shuffleBtn").addEventListener("click", () => { autoPick(); refresh(); });
+    $("clearBtn").addEventListener("click", () => { selected = []; refresh(); });
+    $("selThumbs").addEventListener("click", (e) => { const b = e.target.closest(".thumb"); if (!b) return; selected = selected.filter((s) => s.id !== b.dataset.id); refresh(); });
+    $("findThumbs").addEventListener("click", (e) => {
+      const b = e.target.closest(".thumb"); if (!b || selected.length >= 9) { if (selected.length >= 9) $("status").textContent = "That's 9 already. Remove one first."; return; }
+      const it = all.find((x) => x.id === b.dataset.id); if (it) { selected.push(it); refresh(); }
+    });
+    $("copyCap").addEventListener("click", async () => { try { await navigator.clipboard.writeText($("caption").value); $("status").textContent = "Caption copied."; } catch (e) { $("caption").select(); $("status").textContent = "Press Ctrl+C to copy."; } });
+    $("dlBtn").addEventListener("click", async () => {
+      $("status").textContent = "Building the picture..."; await render();
+      try {
+        cv.toBlob((b) => {
+          if (!b) { $("status").textContent = "Couldn't save the picture. Open this page from vintageplay.ca/ad and try again."; return; }
+          const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = `Vintage Play ad - ${fmt}.png`;
+          document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+          $("status").textContent = "Saved to your Downloads folder.";
+        }, "image/png");
+      } catch (e) { $("status").textContent = "Couldn't save the picture. Open this page from vintageplay.ca/ad and try again."; }
+    });
+
+    (async function init() {
+      await render();
+      await loadAll(); autoPick(); refresh();
+    })();
+  </script>
+</body>
+</html>
