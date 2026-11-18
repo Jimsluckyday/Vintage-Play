@@ -253,11 +253,11 @@
       const pad = Math.round(cardS * 0.07); qrDraw(g, SITE + "/", cardX + pad, cardY + pad, cardS - pad * 2);
 
       const tx = cardX + cardS + 40, tw2 = W - 40 - tx; g.textAlign = "left";
-      const l2 = fitOne(g, SITE_SHORT, '{s}px "Alfa Slab One"', tw2, 54), midY = cardY + cardS / 2;
-      g.fillStyle = "#555"; g.font = "800 30px Nunito"; g.fillText("Find more at", tx, midY - l2 * 0.55);
-      g.fillStyle = INK; g.font = `${l2}px "Alfa Slab One"`; g.fillText(SITE_SHORT, tx, midY + l2 * 0.5);
+      const l1 = fitOne(g, "SCAN TO SHOP", '{s}px "Alfa Slab One"', tw2, 52), l2 = fitOne(g, SITE_SHORT, '{s}px "Alfa Slab One"', tw2, 46), midY = cardY + cardS / 2;
+      g.fillStyle = INK; g.font = `${l1}px "Alfa Slab One"`; g.fillText("SCAN TO SHOP", tx, midY - 14);
+      g.fillStyle = RED; g.font = `${l2}px "Alfa Slab One"`; g.fillText(SITE_SHORT, tx, midY + l2 + 4);
       const s3 = fitOne(g, "Brampton, ON  •  Shipping across Canada", "800 {s}px Nunito", tw2, 28); g.fillStyle = "#555"; g.font = `800 ${s3}px Nunito`;
-      g.fillText("Brampton, ON  •  Shipping across Canada", tx, midY + l2 * 0.5 + s3 + 16);
+      g.fillText("Brampton, ON  •  Shipping across Canada", tx, midY + l2 + 4 + s3 + 16);
       $("fmtHint").textContent = F.label + " • uses " + Math.min(LAY.length, selected.length) + " of " + LAY.length + " picture spots";
     }
 
