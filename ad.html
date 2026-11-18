@@ -107,6 +107,8 @@
       /transformers|optimus/i, /star wars/i, /skylanders/i, /simpsons/i, /mickey/i, /tetris/i, /mega ?man/i, /street fighter/i, /mortal kombat/i, /tony hawk/i,
       /turtles/i, /godzilla/i, /disney/i, /halo/i, /lego/i, /nintendo|game ?boy|atari|genesis|dreamcast|playstation|xbox/i];
 
+    // titles that make poor eye-catchers (guides, lots, not-for-resale discs ...) are skipped by the automatic picks
+    const SKIP = /(lot|guide|manual|strategy|storybook|bundle|set of|not for resale|nfr|sealed|poster)/i;
     const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
     let fmt = "portrait", all = [], selected = [], logoImg = null, imgCache = new Map();
 
@@ -238,10 +240,10 @@
       const order = HOT.map((r) => ({ r, k: Math.random() })).sort((a, b) => a.k - b.k).map((x) => x.r);
       for (const r of order) {
         if (picks.length >= 9) break;
-        const m = all.filter((it) => !used.has(it.id) && r.test(it.title) && (perCat[it.category] || 0) < 3);
+        const m = all.filter((it) => !used.has(it.id) && r.test(it.title) && !SKIP.test(it.title) && (perCat[it.category] || 0) < 3);
         if (m.length) take(m[Math.floor(Math.random() * m.length)]);
       }
-      const rest = all.filter((it) => !used.has(it.id) && it.featured_at).sort(() => Math.random() - 0.5);
+      const rest = all.filter((it) => !used.has(it.id) && it.featured_at && !SKIP.test(it.title)).sort(() => Math.random() - 0.5);
       for (const it of rest) { if (picks.length >= 9) break; take(it); }
       selected = picks;
     }
