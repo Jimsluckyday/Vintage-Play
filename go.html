@@ -197,7 +197,7 @@
 
     // ---- photos of what's for sale: items marked Featured in admin first, then the newest, one tile per title ----
     async function loadItems() {
-      const cols = "id, title, category, brand, asking_price, photo_urls, featured_at, promo_at, created_at";
+      const cols = "id, title, category, brand, photo_urls, featured_at, created_at";
       const base = () => {
         let q = supabaseClient.from("items").select(cols).neq("status", "sold").is("on_hold_at", null);
         if (wantCat) q = q.eq("category", wantCat);
@@ -238,10 +238,7 @@
         if (label) document.getElementById("justInTitle").textContent = "Fresh on the shelf: " + label;
         document.getElementById("grid").innerHTML = items.map((it) => {
           const href = shopUrl(it.category, it.brand);
-          const price = Number(it.asking_price);
-          return `<a class="tile" href="${esc(href)}">
-            <div class="ph"><img src="${esc(it.photo_urls[0])}" alt="${esc(it.title)}" loading="lazy" />${it.promo_at ? '<span class="sale">SALE</span>' : ""}</div>
-            <div class="info"><span class="t">${esc(it.title)}</span><span class="p">$${price.toFixed(2)}</span></div></a>`;
+          return `<a class="tile" href="${esc(href)}" aria-label="${esc(it.title)}"><div class="ph"><img src="${esc(it.photo_urls[0])}" alt="${esc(it.title)}" loading="lazy" /></div></a>`;
         }).join("");
         document.getElementById("justInSection").hidden = false;
       } catch (e) { /* the page still works without the photos */ }
