@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vintage Play Collectables | Shop Retro Games, Comics &amp; Toys</title>
+  <meta name="description" content="Retro video games, comics, toys and collectibles from Brampton, Ontario. Scan the code or tap the button to shop the full catalog." />
+  <meta property="og:title" content="Vintage Play Collectables" />
+  <meta property="og:description" content="Retro video games, comics, toys and collectibles from Brampton, Ontario. Tap to shop the full catalog." />
+  <meta property="og:image" content="https://www.vintageplay.ca/logo.png" />
+  <meta property="og:url" content="https://www.vintageplay.ca/go" />
+  <meta property="og:type" content="website" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Bangers&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="/config.js"></script>
+  <style>
+    /* Splash page for Instagram / Facebook Marketplace / Kijiji posts. Same colours and fonts as the store.
+       Options in the link:  /go  (newest items)   /go?category=toys   /go?category=toys&brand=transformers   &n=12 (how many photos, up to 24) */
+    :root {
+      --bg: #f2e8d5; --bg-card: #fffaf0; --ink: #2e2118; --ink-soft: #6b5a48;
+      --brick: #c2452f; --mustard: #e2a63b; --teal: #2f7d78; --line: #d8c7a8;
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body { margin: 0; font-family: 'Nunito', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.45; }
+    a { color: inherit; }
+    :focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+
+    header { background: var(--brick); color: #fffaf0; text-align: center; padding: 1.4rem 1rem 1.3rem; border-bottom: 6px solid var(--ink); }
+    header img { display: block; width: min(250px, 68%); height: auto; margin: 0 auto 0.4rem; filter: drop-shadow(0 3px 3px rgba(0,0,0,0.35)); }
+    header h1 { margin: 0; font-family: 'Bangers', cursive; font-weight: 400; font-size: clamp(1.6rem, 6vw, 2.2rem); letter-spacing: 0.04em; text-shadow: 2px 2px 0 rgba(0,0,0,0.25); }
+    header p { margin: 0.25rem 0 0; color: #fbe6c8; font-size: 0.95rem; }
+
+    main { width: min(100% - 2rem, 760px); margin: 0 auto; padding-block: 1.4rem 2.5rem; }
+    section { margin-block-end: 2rem; }
+    h2 { margin: 0 0 0.7rem; font-family: 'Bangers', cursive; font-weight: 400; font-size: 1.7rem; letter-spacing: 0.04em; }
+
+    .cta { display: block; text-align: center; text-decoration: none; background: var(--mustard); color: var(--ink); border: 3px solid var(--ink); border-radius: 12px;
+      padding: 0.95rem 1rem; font-family: 'Alfa Slab One', serif; font-size: 1.25rem; box-shadow: 5px 5px 0 var(--ink); }
+    .cta:hover { background: #ebb54f; }
+    .cta:active { transform: translate(2px, 2px); box-shadow: 3px 3px 0 var(--ink); }
+    .cta small { display: block; margin-top: 0.1rem; font-family: 'Nunito', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--ink-soft); }
+
+    .head-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+    .head-row a { font-weight: 800; color: var(--brick); }
+
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; }
+    @media (min-width: 560px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    .tile { display: flex; flex-direction: column; text-decoration: none; background: var(--bg-card); border: 2px solid var(--ink); border-radius: 10px; overflow: hidden; box-shadow: 3px 3px 0 rgba(46,33,24,0.25); }
+    .tile:hover { box-shadow: 3px 3px 0 var(--brick); }
+    .tile .ph { aspect-ratio: 1 / 1; background: #e8dcc3; position: relative; }
+    .tile .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .tile .info { padding: 0.5rem 0.55rem 0.6rem; display: flex; flex-direction: column; gap: 0.2rem; flex: 1; }
+    .tile .t { font-weight: 800; font-size: 0.82rem; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .tile .p { margin-top: auto; font-family: 'Alfa Slab One', serif; font-size: 1.05rem; color: var(--brick); }
+    .tile .sale { position: absolute; top: 6px; left: 6px; background: var(--brick); color: #fffaf0; font-weight: 800; font-size: 0.7rem; letter-spacing: 0.06em; padding: 0.15rem 0.45rem; border-radius: 6px; }
+    .note { color: var(--ink-soft); }
+
+    .qr-row { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .qr-card { background: var(--bg-card); border: 2px solid var(--ink); border-radius: 12px; padding: 1rem; text-align: center; box-shadow: 4px 4px 0 rgba(46,33,24,0.25); }
+    .qr-card .qr { width: min(220px, 70%); margin: 0 auto 0.6rem; background: #fff; border: 2px solid var(--ink); border-radius: 8px; padding: 6px; }
+    .qr-card .qr svg { display: block; width: 100%; height: auto; }
+    .qr-card h3 { margin: 0; font-family: 'Bangers', cursive; font-weight: 400; font-size: 1.45rem; letter-spacing: 0.04em; }
+    .qr-card p { margin: 0.15rem 0 0.5rem; color: var(--ink-soft); font-size: 0.9rem; word-break: break-word; }
+    .btn { display: inline-block; cursor: pointer; font: inherit; font-weight: 800; font-size: 0.85rem; background: var(--bg); color: var(--ink); border: 2px solid var(--ink); border-radius: 8px; padding: 0.35rem 0.8rem; text-decoration: none; }
+    .btn:hover { background: #fff; }
+
+    .social { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+    .social a { background: var(--teal); color: #fffaf0; border: 2px solid var(--ink); text-decoration: none; font-weight: 800; padding: 0.5rem 0.9rem; border-radius: 10px; }
+    .social a:hover { background: #276863; }
+
+    .facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+    .facts li { background: var(--bg-card); border: 2px solid var(--line); border-radius: 10px; padding: 0.6rem 0.8rem; }
+    .facts b { font-weight: 800; }
+    footer { text-align: center; color: var(--ink-soft); font-size: 0.85rem; padding: 0 1rem 2rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="/logo.png" alt="Vintage Play Collectables" width="687" height="480" />
+    <h1>Retro games, comics, toys &amp; collectibles</h1>
+    <p>Brampton, Ontario &middot; new finds added all the time</p>
+  </header>
+
+  <main>
+    <section>
+      <a class="cta" id="shopBtn" href="https://www.vintageplay.ca">Shop the full catalog &rarr;<small id="shopUrlText">vintageplay.ca</small></a>
+    </section>
+
+    <section id="justInSection" hidden>
+      <div class="head-row">
+        <h2 id="justInTitle">Fresh on the shelf</h2>
+        <a id="seeAllLink" href="/">See everything &rarr;</a>
+      </div>
+      <div class="grid" id="grid"></div>
+    </section>
+
+    <section>
+      <h2>Scan to shop</h2>
+      <div class="qr-row" id="qrRow">
+        <div class="qr-card">
+          <div class="qr" id="qrShop" aria-label="QR code for vintageplay.ca"></div>
+          <h3>Scan to shop</h3>
+          <p id="qrShopUrl">vintageplay.ca</p>
+          <button type="button" class="btn" id="qrShopDl">Download QR image</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="followSection" hidden>
+      <h2>Follow &amp; find us</h2>
+      <div class="social" id="socialLinks"></div>
+    </section>
+
+    <section>
+      <h2>Good to know</h2>
+      <ul class="facts">
+        <li><b>Local pickup in Brampton, ON</b> &mdash; pickup, drop-off or a meetup can be arranged.</li>
+        <li><b>Shipping across Canada</b> via Canada Post, quoted after we weigh and pack your item.</li>
+        <li><b>Buying a few things?</b> We're happy to work out a bundle deal &mdash; just ask!</li>
+        <li><b>Questions?</b> <a id="mailLink" href="mailto:info@vintageplay.ca">info@vintageplay.ca</a></li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>&copy; Vintage Play Collectables &middot; Brampton, Ontario</footer>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const wantCat = (params.get("category") || "").trim();
+    const wantBrand = (params.get("brand") || "").trim();
+    const wantN = Math.max(2, Math.min(24, parseInt(params.get("n"), 10) || 8));
+    const SITE = (typeof SITE_URL === "string" && SITE_URL) ? SITE_URL.replace(/\/+$/, "") : "https://www.vintageplay.ca";
+    const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const shopUrl = (cat, brand) => {
+      const p = new URLSearchParams();
+      if (cat) p.set("category", cat);
+      if (cat && brand) p.set("brand", brand);
+      const q = p.toString();
+      return SITE + "/" + (q ? "?" + q : "");
+    };
+    const hostOnly = (u) => u.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+
+    // ---- QR codes (plain SVG squares, prints sharp at any size) ----
+    function qrParts(text) {
+      const qr = qrcode(0, "M"); qr.addData(text); qr.make();
+      const n = qr.getModuleCount(); let path = "";
+      for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) path += `M${c} ${r}h1v1h-1z`;
+      return { n, path, qr };
+    }
+    function qrSvg(text) {
+      try {
+        const { n, path } = qrParts(text);
+        return `<svg viewBox="-2 -2 ${n + 4} ${n + 4}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges"><rect x="-2" y="-2" width="${n + 4}" height="${n + 4}" fill="#fff"/><path d="${path}" fill="#2e2118"/></svg>`;
+      } catch (e) { return ""; }
+    }
+    function downloadQr(text, filename) {
+      const { n, qr } = qrParts(text);
+      const cell = 24, quiet = 4, size = (n + quiet * 2) * cell;
+      const cv = document.createElement("canvas"); cv.width = cv.height = size;
+      const g = cv.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, size, size); g.fillStyle = "#000";
+      for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) g.fillRect((c + quiet) * cell, (r + quiet) * cell, cell, cell);
+      cv.toBlob((b) => {
+        const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      }, "image/png");
+    }
+
+    // ---- shop button + QR ----
+    const target = shopUrl(wantCat, wantBrand);
+    document.getElementById("shopBtn").href = target;
+    document.getElementById("shopUrlText").textContent = hostOnly(target);
+    document.getElementById("qrShop").innerHTML = qrSvg(target);
+    document.getElementById("qrShopUrl").textContent = hostOnly(target);
+    document.getElementById("qrShopDl").addEventListener("click", () => downloadQr(target, "Vintage Play QR.png"));
+    document.getElementById("seeAllLink").href = target;
+    if (typeof CONTACT_EMAIL === "string" && CONTACT_EMAIL) {
+      const m = document.getElementById("mailLink"); m.href = "mailto:" + CONTACT_EMAIL; m.textContent = CONTACT_EMAIL;
+    }
+
+    // ---- follow links (only the ones filled in config.js SELLER_PROFILES) + a follow QR for the first social profile ----
+    (function () {
+      const list = (typeof SELLER_PROFILES !== "undefined" ? SELLER_PROFILES : []).filter((p) => p && p.url);
+      if (!list.length) return;
+      document.getElementById("followSection").hidden = false;
+      document.getElementById("socialLinks").innerHTML = list.map((p) => `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.label)}</a>`).join("");
+      const social = list.find((p) => /instagram|facebook/i.test(p.label)) || list[0];
+      const card = document.createElement("div");
+      card.className = "qr-card";
+      card.innerHTML = `<div class="qr" aria-label="QR code for ${esc(social.label)}">${qrSvg(social.url)}</div><h3>Scan to follow</h3><p>${esc(social.label)}</p><button type="button" class="btn" id="qrFollowDl">Download QR image</button>`;
+      document.getElementById("qrRow").appendChild(card);
+      card.querySelector("#qrFollowDl").addEventListener("click", () => downloadQr(social.url, "Vintage Play Follow QR.png"));
+    })();
+
+    // ---- photos of what's for sale: items marked Featured in admin first, then the newest, one tile per title ----
+    async function loadItems() {
+      const cols = "id, title, category, brand, asking_price, photo_urls, featured_at, promo_at, created_at";
+      const base = () => {
+        let q = supabaseClient.from("items").select(cols).neq("status", "sold").is("on_hold_at", null);
+        if (wantCat) q = q.eq("category", wantCat);
+        if (wantCat && wantBrand) q = q.eq("brand", wantBrand);
+        return q;
+      };
+      const [feat, recent] = await Promise.all([
+        base().not("featured_at", "is", null).order("featured_at", { ascending: false }).limit(60),
+        base().order("created_at", { ascending: false }).limit(120),
+      ]);
+      const seen = new Set(), out = [];
+      for (const it of [...(feat.data || []), ...(recent.data || [])]) {
+        if (!Array.isArray(it.photo_urls) || !it.photo_urls.length) continue;
+        const key = (it.title || "").toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key); out.push(it);
+        if (out.length >= wantN) break;
+      }
+      return out;
+    }
+    async function labelFor() {
+      try {
+        if (wantBrand) {
+          const r = await supabaseClient.from("brands").select("label").eq("slug", wantBrand).limit(1);
+          if (r.data && r.data[0]) return r.data[0].label;
+        }
+        if (wantCat) {
+          const r = await supabaseClient.from("categories").select("label").eq("slug", wantCat).limit(1);
+          if (r.data && r.data[0]) return r.data[0].label;
+        }
+      } catch (e) {}
+      return "";
+    }
+    (async function () {
+      try {
+        const [items, label] = await Promise.all([loadItems(), labelFor()]);
+        if (!items.length) return;
+        if (label) document.getElementById("justInTitle").textContent = "Fresh on the shelf: " + label;
+        document.getElementById("grid").innerHTML = items.map((it) => {
+          const href = shopUrl(it.category, it.brand);
+          const price = Number(it.asking_price);
+          return `<a class="tile" href="${esc(href)}">
+            <div class="ph"><img src="${esc(it.photo_urls[0])}" alt="${esc(it.title)}" loading="lazy" />${it.promo_at ? '<span class="sale">SALE</span>' : ""}</div>
+            <div class="info"><span class="t">${esc(it.title)}</span><span class="p">$${price.toFixed(2)}</span></div></a>`;
+        }).join("");
+        document.getElementById("justInSection").hidden = false;
+      } catch (e) { /* the page still works without the photos */ }
+    })();
+  </script>
+</body>
+</html>

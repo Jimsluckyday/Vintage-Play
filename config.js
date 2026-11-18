@@ -1,6 +1,6 @@
 // Bump this by 1 every time this file (or admin.html/index.html) is redeployed.
 // Lets the page detect and warn if the browser is running a stale cached copy.
-const LOCAL_VERSION = "138";
+const LOCAL_VERSION = "139";
 
 // Public site URL — used in the Kijiji/FB listing generator to point buyers back to the full catalog.
 const SITE_URL = "https://www.vintageplay.ca";
@@ -11,6 +11,7 @@ const SITE_URL = "https://www.vintageplay.ca";
 // it's filled in — no need to remove entries you haven't gotten to yet.
 const SELLER_PROFILES = [
   { label: "Kijiji", url: "" },
+  { label: "Instagram", url: "" },
   { label: "Facebook Marketplace", url: "" },
   { label: "eBay", url: "" },
 ];
