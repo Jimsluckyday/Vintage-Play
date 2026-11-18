@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Vintage Play Collectables | Remember These?</title>
-  <meta name="description" content="Retro video games, comics, toys and collectibles from Brampton, Ontario. Tap the button or scan the code to shop." />
+  <meta name="description" content="Retro video games, comics, toys and collectibles from Brampton, Ontario." />
   <meta property="og:title" content="Remember these? Vintage Play Collectables" />
-  <meta property="og:description" content="Retro video games, comics, toys and collectibles from Brampton, Ontario. Tap to shop." />
+  <meta property="og:description" content="Retro video games, comics, toys and collectibles from Brampton, Ontario." />
   <meta property="og:image" content="https://www.vintageplay.ca/logo.png" />
   <meta property="og:url" content="https://www.vintageplay.ca/go" />
   <meta property="og:type" content="website" />
@@ -17,62 +17,60 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="/config.js"></script>
   <style>
-    /* Splash page for Instagram / Facebook Marketplace / Kijiji. White, high contrast, pictures only, NO prices (owner's rule).
-       Links:  /go   /go?category=toys   /go?category=toys&brand=transformers   &n=6 (how many pictures, 3 to 12) */
+    /* Splash page for Instagram / Facebook Marketplace / Kijiji. The PICTURES lead; the shop link is there but quiet. No prices (owner's rule).
+       Links:  /go   /go?category=toys   /go?category=toys&brand=transformers   &n=5 / 9 / 13 (how many pictures) */
     :root { --ink: #111; --yellow: #ffd21f; --red: #e4202d; --teal: #2f7d78; }
     * { box-sizing: border-box; }
     html { -webkit-text-size-adjust: 100%; }
+    /* white page; faint classic PlayStation button symbols (triangle green, circle red, cross blue, square pink) + soft colour glows */
     body { margin: 0; font-family: 'Nunito', system-ui, -apple-system, sans-serif; color: var(--ink); line-height: 1.4;
-      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' fill='none' stroke-width='5' stroke-linecap='round' stroke-linejoin='round' opacity='.34'%3E%3Ccircle cx='30' cy='40' r='9' fill='%23ff5d8f' stroke='none'/%3E%3Ccircle cx='160' cy='28' r='10' stroke='%232ec4b6'/%3E%3Cpath d='M214 60h26M227 47v26' stroke='%233a86ff'/%3E%3Cpath d='M70 120l14-24 14 24z' stroke='%23ff9f1c'/%3E%3Cpath d='M20 190q12-12 24 0t24 0' stroke='%238338ec'/%3E%3Ccircle cx='190' cy='150' r='8' fill='%23ffd21f' stroke='none'/%3E%3Cpath d='M120 210h24M132 198v24' stroke='%23ff5d8f'/%3E%3Ccircle cx='235' cy='225' r='9' stroke='%233a86ff'/%3E%3Cpath d='M150 120q12-12 24 0t24 0' stroke='%232ec4b6'/%3E%3C/svg%3E"),
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300' fill='none' stroke-width='7' stroke-linecap='round' stroke-linejoin='round' opacity='.3'%3E%3Cpath d='M40 40l-16 28h32z' stroke='%232fbf71' transform='rotate(-12 40 54)'/%3E%3Ccircle cx='190' cy='44' r='17' stroke='%23e4202d'/%3E%3Cpath d='M240 130l32 32M272 130l-32 32' stroke='%233a86ff'/%3E%3Crect x='60' y='150' width='32' height='32' stroke='%23ff5d8f' transform='rotate(10 76 166)'/%3E%3Cpath d='M170 230l-16 28h32z' stroke='%232fbf71' transform='rotate(14 170 244)'/%3E%3Ccircle cx='38' cy='262' r='17' stroke='%23e4202d'/%3E%3Cpath d='M118 90l28 28M146 90l-28 28' stroke='%233a86ff'/%3E%3Crect x='238' y='236' width='30' height='30' stroke='%23ff5d8f' transform='rotate(-8 253 251)'/%3E%3C/svg%3E"),
         radial-gradient(circle at 0% 0%, rgba(255,93,143,.20), transparent 46%), radial-gradient(circle at 100% 24%, rgba(58,134,255,.17), transparent 46%),
-        radial-gradient(circle at 0% 64%, rgba(255,210,31,.27), transparent 46%), radial-gradient(circle at 100% 100%, rgba(46,196,182,.24), transparent 48%), #fff;
-      background-attachment: scroll; }
+        radial-gradient(circle at 0% 64%, rgba(255,210,31,.27), transparent 46%), radial-gradient(circle at 100% 100%, rgba(46,196,182,.24), transparent 48%), #fff; }
     a { color: inherit; }
     :focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
 
-    .band { background: none; }
-    .band-in { width: min(100% - 2rem, 760px); margin: 0 auto; display: flex; align-items: center; gap: clamp(0.8rem, 4vw, 2rem); padding-block: 1rem; }
-    .sticker { flex: none; background: linear-gradient(135deg, #2b59ff, #8a2be2); border: 5px solid var(--ink); border-radius: 18px; box-shadow: 7px 7px 0 var(--ink); padding: 0.6rem 0.8rem; transform: rotate(-1.8deg); }
-    .band img { display: block; width: clamp(110px, 28vw, 210px); height: auto; }
-    .band h1 { margin: 0; font-family: 'Bangers', cursive; font-weight: 400; letter-spacing: 0.02em; line-height: 0.95; font-size: clamp(2.4rem, 11vw, 5rem); color: #2b59ff;
+    .band-in { width: min(100% - 2rem, 760px); margin: 0 auto; display: flex; align-items: center; gap: clamp(0.7rem, 3vw, 1.4rem); padding-block: 1rem 0.2rem; }
+    .sticker { flex: none; background: linear-gradient(135deg, #2b59ff, #8a2be2); border: 4px solid var(--ink); border-radius: 14px; box-shadow: 5px 5px 0 var(--ink); padding: 0.4rem 0.55rem; transform: rotate(-1.8deg); }
+    .sticker img { display: block; width: clamp(78px, 17vw, 124px); height: auto; }
+    .band h1 { margin: 0; font-family: 'Bangers', cursive; font-weight: 400; letter-spacing: 0.02em; line-height: 0.95; font-size: clamp(1.9rem, 8.5vw, 3.6rem); color: #2b59ff;
       -webkit-text-stroke: 0.09em var(--ink); paint-order: stroke fill; text-shadow: 0.06em 0.06em 0 var(--ink); }
     .band h1 span { display: block; color: #ff3b3b; }
 
-    main { width: min(100% - 2rem, 760px); margin: 0 auto; padding-block: 1.6rem 2.2rem; }
-    .cta { display: block; text-align: center; text-decoration: none; background: var(--yellow); color: var(--ink); border: 4px solid var(--ink); border-radius: 14px; padding: 1rem 1rem 0.9rem;
-      font-family: 'Alfa Slab One', serif; font-size: clamp(1.3rem, 5.5vw, 2rem); box-shadow: 7px 7px 0 var(--ink); }
-    .cta:hover { background: #ffe25a; }
-    .cta:active { transform: translate(3px, 3px); box-shadow: 4px 4px 0 var(--ink); }
-    .cta small { display: block; margin-top: 0.15rem; font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 0.95rem; color: #444; }
+    main { width: min(100% - 2rem, 760px); margin: 0 auto; padding-block: 0.6rem 2rem; }
 
-    .grid { margin-block: 2rem 1.2rem; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(0.6rem, 3vw, 1.4rem); }
-    .tile { --f: #ff3b5c; display: block; aspect-ratio: 1 / 1; border: 4px solid var(--ink); border-radius: 12px; overflow: hidden; box-shadow: 6px 6px 0 var(--ink); background: var(--f); padding: 8px; transition: transform 0.15s; }
+    /* the pictures lead: one big picture, then smaller ones */
+    .grid { margin-block: 1.1rem 1.2rem; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: clamp(0.5rem, 2.4vw, 1.1rem); }
+    .tile { --f: #ff3b5c; display: block; aspect-ratio: 1 / 1; border: 4px solid var(--ink); border-radius: 12px; overflow: hidden; box-shadow: 5px 5px 0 var(--ink); background: var(--f); padding: 6px; transition: transform 0.15s; }
+    .tile:first-child { grid-column: span 2; grid-row: span 2; padding: 10px; }
     .tile:nth-child(9n+2) { --f: #2b59ff; } .tile:nth-child(9n+3) { --f: #ffb703; } .tile:nth-child(9n+4) { --f: #06b6a4; } .tile:nth-child(9n+5) { --f: #8a2be2; }
     .tile:nth-child(9n+6) { --f: #ff7b00; } .tile:nth-child(9n+7) { --f: #e4202d; } .tile:nth-child(9n+8) { --f: #1d9bf0; } .tile:nth-child(9n+9) { --f: #ff5d8f; }
-    .tile:nth-child(3n+1) { transform: rotate(-1.6deg); }
+    .tile:nth-child(3n+1) { transform: rotate(-1.2deg); }
     .tile:nth-child(3n+2) { transform: rotate(1.3deg); }
-    .tile:nth-child(3n)   { transform: rotate(-0.9deg); }
-    .tile:hover { transform: rotate(0) scale(1.03); }
+    .tile:nth-child(3n)   { transform: rotate(-0.8deg); }
+    .tile:hover { transform: rotate(0) scale(1.02); }
     .tile img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 4px; background: #eee; }
     @media (prefers-reduced-motion: reduce) { .tile { transition: none; } }
-    .strap { text-align: center; margin: 0 auto 2rem; }
-    .strap span { display: inline-block; background: var(--yellow); padding: 0.1rem 0.9rem; font-family: 'Bangers', cursive; font-size: clamp(1.4rem, 6vw, 2.2rem); letter-spacing: 0.03em; transform: rotate(-0.6deg); }
+    .strap { text-align: center; margin: 0 auto 1.6rem; }
+    .strap span { display: inline-block; background: var(--yellow); padding: 0.05rem 0.8rem; font-family: 'Bangers', cursive; font-size: clamp(1.1rem, 4.6vw, 1.7rem); letter-spacing: 0.03em; transform: rotate(-0.6deg); }
 
-    .qr-row { display: flex; flex-wrap: wrap; gap: 1.4rem; align-items: center; justify-content: center; }
-    .qr-card { position: relative; display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap; justify-content: center; }
-    .qr { width: 190px; background: #fff; border: 5px solid var(--ink); border-radius: 14px; padding: 8px; box-shadow: 7px 7px 0 #3a86ff; }
+    /* small, quiet QR + address: there to be found, not pushing */
+    .qr-row { display: flex; flex-wrap: wrap; gap: 1.2rem; align-items: center; justify-content: center; }
+    .qr-card { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; justify-content: center; }
+    .qr { width: 118px; background: #fff; border: 4px solid var(--ink); border-radius: 12px; padding: 6px; box-shadow: 5px 5px 0 #3a86ff; }
     .qr svg { display: block; width: 100%; height: auto; }
     .qr-text { text-align: left; }
-    .qr-text h2 { margin: 0; font-family: 'Alfa Slab One', serif; font-weight: 400; font-size: clamp(1.5rem, 6vw, 2.2rem); line-height: 1.05; }
-    .qr-text .u { font-family: 'Alfa Slab One', serif; font-size: clamp(1.25rem, 5vw, 1.8rem); color: var(--red); word-break: break-word; }
-    .qr-text p { margin: 0.4rem 0 0; font-weight: 800; color: #444; }
-    .btn { display: inline-block; cursor: pointer; font: inherit; font-weight: 800; font-size: 0.85rem; background: #fff; color: var(--ink); border: 2px solid var(--ink); border-radius: 8px; padding: 0.3rem 0.75rem; margin-top: 0.5rem; }
+    .qr-text .k { color: #555; font-weight: 800; font-size: 0.9rem; }
+    .qr-text .u { display: block; font-family: 'Alfa Slab One', serif; font-size: clamp(1.15rem, 4.6vw, 1.5rem); text-decoration: none; word-break: break-word; }
+    .qr-text .u:hover { color: var(--red); }
+    .qr-text p { margin: 0.25rem 0 0; font-weight: 800; color: #555; font-size: 0.88rem; }
+    .btn { display: inline-block; cursor: pointer; font: inherit; font-weight: 800; font-size: 0.8rem; background: #fff; color: var(--ink); border: 2px solid var(--ink); border-radius: 8px; padding: 0.2rem 0.65rem; margin-top: 0.4rem; }
     .btn:hover { background: var(--yellow); }
 
-    .social { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center; margin-top: 1.8rem; }
-    .social a { background: var(--ink); color: #fff; text-decoration: none; font-weight: 800; padding: 0.55rem 1rem; border-radius: 10px; }
+    .social { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center; margin-top: 1.4rem; }
+    .social a { background: var(--ink); color: #fff; text-decoration: none; font-weight: 800; padding: 0.45rem 0.9rem; border-radius: 10px; font-size: 0.9rem; }
     .social a:hover { background: var(--red); }
-    footer { text-align: center; color: #555; font-size: 0.9rem; padding: 0 1rem 2rem; font-weight: 700; }
+    footer { text-align: center; color: #555; font-size: 0.85rem; padding: 0 1rem 2rem; font-weight: 700; }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -85,8 +83,6 @@
   </div>
 
   <main>
-    <a class="cta" id="shopBtn" href="https://www.vintageplay.ca">Tap to shop &rarr;<small id="shopUrlText">vintageplay.ca</small></a>
-
     <div class="grid" id="grid" hidden></div>
     <div class="strap"><span>Retro games &bull; Comics &bull; Toys &bull; Collectibles</span></div>
 
@@ -94,8 +90,8 @@
       <div class="qr-card">
         <div class="qr" id="qrShop" role="img" aria-label="QR code for vintageplay.ca"></div>
         <div class="qr-text">
-          <h2>Scan to shop</h2>
-          <div class="u" id="qrShopUrl">vintageplay.ca</div>
+          <div class="k">Find more at</div>
+          <a class="u" id="shopBtn" href="https://www.vintageplay.ca">vintageplay.ca</a>
           <p>Brampton, ON &bull; Shipping across Canada</p>
           <button type="button" class="btn" id="qrShopDl">Download QR image</button>
         </div>
@@ -110,7 +106,7 @@
     const params = new URLSearchParams(location.search);
     const wantCat = (params.get("category") || "").trim();
     const wantBrand = (params.get("brand") || "").trim();
-    const wantN = Math.max(3, Math.min(12, parseInt(params.get("n"), 10) || 9));
+    const wantN = Math.max(5, Math.min(13, parseInt(params.get("n"), 10) || 9));
     const SITE = (typeof SITE_URL === "string" && SITE_URL) ? SITE_URL.replace(/\/+$/, "") : "https://www.vintageplay.ca";
     const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
     const shopUrl = (cat, brand) => {
@@ -143,10 +139,8 @@
     }
 
     const target = shopUrl(wantCat, wantBrand);
-    document.getElementById("shopBtn").href = target;
-    document.getElementById("shopUrlText").textContent = hostOnly(target);
+    const addr = document.getElementById("shopBtn"); addr.href = target; addr.textContent = hostOnly(target);
     document.getElementById("qrShop").innerHTML = qrSvg(target);
-    document.getElementById("qrShopUrl").textContent = hostOnly(target);
     document.getElementById("qrShopDl").addEventListener("click", () => downloadQr(target, "Vintage Play QR.png"));
 
     // follow links: only the ones filled in config.js SELLER_PROFILES, plus a follow QR for the first Instagram/Facebook one
@@ -157,7 +151,7 @@
       box.innerHTML = list.map((p) => `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.label)}</a>`).join("");
       const social = list.find((p) => /instagram|facebook/i.test(p.label)) || list[0];
       const card = document.createElement("div"); card.className = "qr-card";
-      card.innerHTML = `<div class="qr" role="img" aria-label="QR code for ${esc(social.label)}">${qrSvg(social.url)}</div><div class="qr-text"><h2>Scan to follow</h2><div class="u">${esc(social.label)}</div><button type="button" class="btn" id="qrFollowDl">Download QR image</button></div>`;
+      card.innerHTML = `<div class="qr" role="img" aria-label="QR code for ${esc(social.label)}">${qrSvg(social.url)}</div><div class="qr-text"><div class="k">Follow us on</div><span class="u">${esc(social.label)}</span><button type="button" class="btn" id="qrFollowDl">Download QR image</button></div>`;
       document.getElementById("qrRow").appendChild(card);
       card.querySelector("#qrFollowDl").addEventListener("click", () => downloadQr(social.url, "Vintage Play Follow QR.png"));
     })();
@@ -188,9 +182,10 @@
     (async function () {
       try {
         const items = await loadItems();
-        if (items.length < 3) return;
+        if (items.length < 5) return;
+        const count = 1 + 4 * Math.floor((items.length - 1) / 4);   // one big picture + full rows of four
         const grid = document.getElementById("grid");
-        grid.innerHTML = items.slice(0, Math.floor(items.length / 3) * 3).map((it) =>
+        grid.innerHTML = items.slice(0, count).map((it) =>
           `<a class="tile" href="${esc(shopUrl(it.category, it.brand))}" aria-label="${esc(it.title)}"><img src="${esc(it.photo_urls[0])}" alt="${esc(it.title)}" loading="lazy" /></a>`).join("");
         grid.hidden = false;
       } catch (e) { /* the page still works without the pictures */ }
