@@ -59,7 +59,7 @@
           <button type="button" data-fmt="square">Square</button>
           <button type="button" data-fmt="story">Story / Reel (9:16)</button>
         </div>
-        <p class="hint">Feed uses the first 10 pictures, square 8, story 10. The first picture is the biggest.</p>
+        <p class="hint">Feed uses the first 10 pictures, square 7, story 10. The first picture is the biggest.</p>
       </div>
 
       <div>
@@ -94,22 +94,22 @@
 
   <script>
     const W = 1080;
-    // mBottom = where the pile of pictures ends, qr = size of the small QR card
+    // mBottom = where the pictures end, qr = size of the small QR card
     const FORMATS = {
-      portrait: { H: 1350, band: 170, logoH: 128, headFont: 100, mBottom: 1075, qr: 168, label: "Feed post, 1080 x 1350" },
-      square:   { H: 1080, band: 150, logoH: 112, headFont: 88,  mBottom: 700,  qr: 190, label: "Square, 1080 x 1080" },
-      story:    { H: 1920, band: 215, logoH: 160, headFont: 118, mBottom: 1560, qr: 200, label: "Story / Reel, 1080 x 1920" },
+      portrait: { H: 1350, band: 170, logoH: 128, headFont: 100, mBottom: 1085, qr: 156, label: "Feed post, 1080 x 1350" },
+      square:   { H: 1080, band: 150, logoH: 112, headFont: 88,  mBottom: 725,  qr: 190, label: "Square, 1080 x 1080" },
+      story:    { H: 1920, band: 215, logoH: 160, headFont: 118, mBottom: 1490, qr: 200, label: "Story / Reel, 1080 x 1920" },
     };
-    // loose, slightly cluttered pile of tilted pictures: [x, y, size, tilt in degrees]; later ones sit on top; the first is the biggest
+    // mixed sizes, tilted, close together but NEVER touching: [x, y, size, tilt in degrees]; the first is the biggest (spacing checked in code)
     const PILE = [
-      [40, 192, 460, -3], [490, 205, 290, 4], [760, 192, 280, -5], [520, 490, 260, -6], [770, 478, 270, 5],
-      [40, 610, 300, 3], [320, 735, 250, -4], [590, 765, 260, 4], [810, 755, 230, -5], [70, 880, 200, -3],
+      [40, 192, 450, -3], [545, 192, 235, 4], [828, 200, 200, -5], [545, 480, 215, -4], [802, 468, 232, 4],
+      [545, 770, 230, 3], [815, 765, 210, -4], [40, 690, 182, 4], [290, 688, 190, -3], [150, 915, 150, 3],
     ];
     const PLACEMENTS = {
       portrait: PILE,
-      square: [[40, 172, 330, -3], [350, 185, 250, 4], [610, 172, 250, -5], [830, 196, 210, 5], [40, 458, 220, 4], [250, 440, 250, -4], [520, 456, 240, 3], [770, 432, 260, -5]],
-      // story: the same pile stretched taller (a little bigger, more air between the rows)
-      story: PILE.map(([x, y, sz, r]) => { const n = Math.round(sz * 1.1); return [Math.min(x, 1040 - n), Math.round(237 + (y - 192) * 1.5), n, r]; }),
+      square: [[40, 172, 330, -3], [420, 172, 250, 4], [715, 180, 230, -5], [442, 470, 215, -4], [705, 468, 235, 4], [45, 552, 150, 4], [235, 548, 160, -4]],
+      // story: the same arrangement with more air between the rows
+      story: PILE.map(([x, y, sz, r]) => [x, Math.round(237 + (y - 192) * 1.5), sz, r]),
     };
     const HEADLINES = ["REMEMBER THESE?", "YOUR CHILDHOOD IS FOR SALE", "FOUND YOUR FAVOURITE?", "LEVEL UP YOUR SHELF", "RETRO FINDS, DELIVERED"];
     const SITE = (typeof SITE_URL === "string" && SITE_URL) ? SITE_URL.replace(/\/+$/, "") : "https://www.vintageplay.ca";
@@ -185,17 +185,18 @@
       g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
       const glows = [[0, 0, PAL[0], 0.20, 760], [W, H * 0.26, PAL[4], 0.17, 680], [0, H * 0.62, PAL[2], 0.28, 760], [W, H, PAL[3], 0.24, 800], [W * 0.5, H * 0.5, PAL[5], 0.07, 600]];
       glows.forEach(([x, y, c, a, r]) => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, hexA(c, a)); gr.addColorStop(1, hexA(c, 0)); g.fillStyle = gr; g.fillRect(0, 0, W, H); });
-      // classic PlayStation button symbols (triangle green, circle red, cross blue, square pink), kept faint so the pictures stay the stars
-      const PS = [["#2fbf71", "tri"], ["#e4202d", "circle"], ["#3a86ff", "cross"], ["#ff5d8f", "square"]];
-      const R = rng(11), n = Math.round(W * H / 17000);
-      for (let i = 0; i < n; i++) {
-        const x = R() * W, y = R() * H, s = 26 + R() * 24, [c, k] = PS[i % 4], rot = (R() - 0.5) * 1.1;
-        g.save(); g.translate(x, y); g.rotate(rot); g.globalAlpha = 0.30; g.strokeStyle = c; g.lineWidth = 7; g.lineCap = "round"; g.lineJoin = "round"; g.beginPath();
-        if (k === "tri") { g.moveTo(0, -s * 0.6); g.lineTo(s * 0.55, s * 0.42); g.lineTo(-s * 0.55, s * 0.42); g.closePath(); }
-        else if (k === "circle") { g.arc(0, 0, s * 0.5, 0, Math.PI * 2); }
-        else if (k === "cross") { g.moveTo(-s * 0.45, -s * 0.45); g.lineTo(s * 0.45, s * 0.45); g.moveTo(s * 0.45, -s * 0.45); g.lineTo(-s * 0.45, s * 0.45); }
-        else { g.rect(-s * 0.45, -s * 0.45, s * 0.9, s * 0.9); }
-        g.stroke(); g.restore();
+      // classic PlayStation button symbols in a tidy, even pattern (triangle green, circle red, cross blue, square pink), faint so the pictures stay the stars
+      const PS = [["#2fbf71", "tri"], ["#e4202d", "circle"], ["#3a86ff", "cross"], ["#ff5d8f", "square"]], step = 170, sz = 36;
+      for (let row = 0, y = 70; y < H + step; row++, y += step) {
+        for (let col = 0, x = 60 + (row % 2) * (step / 2); x < W + step; col++, x += step) {
+          const [c, k] = PS[(col + row * 2) % 4];
+          g.save(); g.translate(x, y); g.globalAlpha = 0.26; g.strokeStyle = c; g.lineWidth = 7; g.lineCap = "round"; g.lineJoin = "round"; g.beginPath();
+          if (k === "tri") { g.moveTo(0, -sz * 0.6); g.lineTo(sz * 0.55, sz * 0.42); g.lineTo(-sz * 0.55, sz * 0.42); g.closePath(); }
+          else if (k === "circle") { g.arc(0, 0, sz * 0.5, 0, Math.PI * 2); }
+          else if (k === "cross") { g.moveTo(-sz * 0.45, -sz * 0.45); g.lineTo(sz * 0.45, sz * 0.45); g.moveTo(sz * 0.45, -sz * 0.45); g.lineTo(-sz * 0.45, sz * 0.45); }
+          else { g.rect(-sz * 0.45, -sz * 0.45, sz * 0.9, sz * 0.9); }
+          g.stroke(); g.restore();
+        }
       }
     }
 
