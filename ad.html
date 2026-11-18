@@ -108,7 +108,7 @@
       /turtles/i, /godzilla/i, /disney/i, /halo/i, /lego/i, /nintendo|game ?boy|atari|genesis|dreamcast|playstation|xbox/i];
 
     // titles that make poor eye-catchers (guides, lots, not-for-resale discs ...) are skipped by the automatic picks
-    const SKIP = /(lot|guide|manual|strategy|storybook|bundle|set of|not for resale|nfr|sealed|poster)/i;
+    const SKIP = /\b(lot|guide|manual|strategy|storybook|bundle|set of|not for resale|nfr|sealed|poster)\b/i;
     const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
     let fmt = "portrait", all = [], selected = [], logoImg = null, imgCache = new Map();
 
