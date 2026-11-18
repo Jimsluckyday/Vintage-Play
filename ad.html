@@ -59,7 +59,7 @@
           <button type="button" data-fmt="square">Square</button>
           <button type="button" data-fmt="story">Story / Reel (9:16)</button>
         </div>
-        <p class="hint">Feed uses the first 9 pictures, square 5, story 10. The first picture is the big one.</p>
+        <p class="hint">Feed uses the first 10 pictures, square 8, story 10. The first picture is the biggest.</p>
       </div>
 
       <div>
@@ -94,16 +94,22 @@
 
   <script>
     const W = 1080;
+    // mBottom = where the pile of pictures ends, qr = size of the small QR card
     const FORMATS = {
-      portrait: { H: 1350, band: 170, logoH: 128, headFont: 100, label: "Feed post, 1080 x 1350" },
-      square:   { H: 1080, band: 150, logoH: 112, headFont: 88,  label: "Square, 1080 x 1080" },
-      story:    { H: 1920, band: 215, logoH: 160, headFont: 118, label: "Story / Reel, 1080 x 1920" },
+      portrait: { H: 1350, band: 170, logoH: 128, headFont: 100, mBottom: 1075, qr: 168, label: "Feed post, 1080 x 1350" },
+      square:   { H: 1080, band: 150, logoH: 112, headFont: 88,  mBottom: 700,  qr: 190, label: "Square, 1080 x 1080" },
+      story:    { H: 1920, band: 215, logoH: 160, headFont: 118, mBottom: 1560, qr: 200, label: "Story / Reel, 1080 x 1920" },
     };
-    // picture layouts on a 4-column grid: [col, row, width, height]; the first picture is the big one
-    const LAYOUTS = {
-      portrait: [[0,0,2,2],[2,0,1,1],[3,0,1,1],[2,1,1,1],[3,1,1,1],[0,2,1,1],[1,2,1,1],[2,2,1,1],[3,2,1,1]],
-      square:   [[0,0,2,2],[2,0,1,1],[3,0,1,1],[2,1,1,1],[3,1,1,1]],
-      story:    [[0,0,2,2],[2,0,1,1],[3,0,1,1],[2,1,1,1],[3,1,1,1],[0,2,1,1],[1,2,1,1],[0,3,1,1],[1,3,1,1],[2,2,2,2]],
+    // loose, slightly cluttered pile of tilted pictures: [x, y, size, tilt in degrees]; later ones sit on top; the first is the biggest
+    const PILE = [
+      [40, 192, 460, -3], [490, 205, 290, 4], [760, 192, 280, -5], [520, 490, 260, -6], [770, 478, 270, 5],
+      [40, 610, 300, 3], [320, 735, 250, -4], [590, 765, 260, 4], [810, 755, 230, -5], [70, 880, 200, -3],
+    ];
+    const PLACEMENTS = {
+      portrait: PILE,
+      square: [[40, 172, 330, -3], [350, 185, 250, 4], [610, 172, 250, -5], [830, 196, 210, 5], [40, 458, 220, 4], [250, 440, 250, -4], [520, 456, 240, 3], [770, 432, 260, -5]],
+      // story: the same pile stretched taller (a little bigger, more air between the rows)
+      story: PILE.map(([x, y, sz, r]) => { const n = Math.round(sz * 1.1); return [Math.min(x, 1040 - n), Math.round(237 + (y - 192) * 1.5), n, r]; }),
     };
     const HEADLINES = ["REMEMBER THESE?", "YOUR CHILDHOOD IS FOR SALE", "FOUND YOUR FAVOURITE?", "LEVEL UP YOUR SHELF", "RETRO FINDS, DELIVERED"];
     const SITE = (typeof SITE_URL === "string" && SITE_URL) ? SITE_URL.replace(/\/+$/, "") : "https://www.vintageplay.ca";
@@ -194,7 +200,7 @@
     }
 
     async function render() {
-      const F = FORMATS[fmt], H = F.H, LAY = LAYOUTS[fmt]; cv.height = H;
+      const F = FORMATS[fmt], H = F.H, PLACE = PLACEMENTS[fmt]; cv.height = H;
       await Promise.all([document.fonts.load("100px Bangers"), document.fonts.load('60px "Alfa Slab One"'), document.fonts.load("800 30px Nunito")]);
       const g = ctx; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
       drawBackdrop(g, H);
@@ -222,43 +228,40 @@
         g.fillStyle = HEAD_COLORS[i % HEAD_COLORS.length]; g.fillText(ln, hx, by); by += lineH;
       });
 
-      // pictures: the big one first, then smaller ones
-      const cell = 232, gap = 24, rows = Math.max(...LAY.map((p) => p[1] + p[3])), mTop = F.band + 22;
-      const use = selected.slice(0, LAY.length);
+      // pictures: a loose, slightly cluttered pile of tilted photos, the biggest first
+      const use = selected.slice(0, PLACE.length);
       const imgs = await Promise.all(use.map((it) => loadImage(photoSrc(it.photo_urls[0]))));
-      const tilts = [-1.2, 1.5, -1.1, 1.3, -1.6, 1.0, -0.9, 1.6, -1.3, 1.1];
-      for (let i = 0; i < LAY.length; i++) {
-        const [c, r, cw, ch] = LAY[i], sz = cw * cell + (cw - 1) * gap, x = 40 + c * (cell + gap), y = mTop + r * (cell + gap), fw = cw > 1 ? 22 : 16;
-        g.save(); g.translate(x + sz / 2, y + sz / 2); g.rotate((tilts[i] * Math.PI) / 180); g.translate(-sz / 2, -sz / 2);
+      for (let i = 0; i < PLACE.length; i++) {
+        const [x, y, sz, rot] = PLACE[i], fw = sz > 380 ? 22 : sz > 270 ? 18 : 14;
+        g.save(); g.translate(x + sz / 2, y + sz / 2); g.rotate((rot * Math.PI) / 180); g.translate(-sz / 2, -sz / 2);
         g.fillStyle = INK; rr(g, 8, 8, sz, sz, 12); g.fill();
         g.save(); rr(g, 0, 0, sz, sz, 12); g.clip(); g.fillStyle = "#eee"; g.fillRect(0, 0, sz, sz);
         if (imgs[i]) drawCover(g, imgs[i], 0, 0, sz); g.restore();
         g.lineWidth = fw; g.strokeStyle = FRAMES[i % FRAMES.length]; rr(g, fw / 2, fw / 2, sz - fw, sz - fw, 8); g.stroke();
         g.lineWidth = 5; g.strokeStyle = INK; rr(g, 0, 0, sz, sz, 12); g.stroke(); g.restore();
       }
-      const mBottom = mTop + rows * cell + (rows - 1) * gap;
 
       // line under the pictures
-      const sub = $("subText").value.trim().toUpperCase(), sBase = mBottom + 58;
+      const mBottom = F.mBottom, sub = $("subText").value.trim().toUpperCase(), sBase = mBottom + 52;
       if (sub) {
-        const sz = fitOne(g, sub, "{s}px Bangers", W - 140, 46); g.font = `${sz}px Bangers`; g.textAlign = "center";
+        const sz = fitOne(g, sub, "{s}px Bangers", W - 140, 44); g.font = `${sz}px Bangers`; g.textAlign = "center";
         const tw = g.measureText(sub).width;
         g.save(); g.translate(W / 2, sBase); g.rotate(-0.01); g.fillStyle = YELLOW; g.fillRect(-tw / 2 - 16, -sz * 0.78, tw + 32, sz * 1.05); g.fillStyle = INK; g.fillText(sub, 0, 0); g.restore();
       }
 
-      // small, quiet QR + web address (there to be found, not to push)
-      const bTop = sBase + 40, bBot = H - 34, cardS = Math.min(250, bBot - bTop), cardX = 40, cardY = bTop + (bBot - bTop - cardS) / 2;
-      g.fillStyle = "#3a86ff"; rr(g, cardX + 7, cardY + 7, cardS, cardS, 16); g.fill();
-      g.fillStyle = "#fff"; rr(g, cardX, cardY, cardS, cardS, 16); g.fill(); g.lineWidth = 6; g.strokeStyle = INK; g.stroke();
+      // small QR + web address
+      const bTop = sBase + 28, bBot = H - 28, cardS = Math.min(F.qr, bBot - bTop), cardX = 40, cardY = bTop + (bBot - bTop - cardS) / 2;
+      g.fillStyle = "#3a86ff"; rr(g, cardX + 6, cardY + 6, cardS, cardS, 14); g.fill();
+      g.fillStyle = "#fff"; rr(g, cardX, cardY, cardS, cardS, 14); g.fill(); g.lineWidth = 5; g.strokeStyle = INK; g.stroke();
       const pad = Math.round(cardS * 0.07); qrDraw(g, SITE + "/", cardX + pad, cardY + pad, cardS - pad * 2);
 
-      const tx = cardX + cardS + 40, tw2 = W - 40 - tx; g.textAlign = "left";
-      const l1 = fitOne(g, "SCAN TO SHOP", '{s}px "Alfa Slab One"', tw2, 52), l2 = fitOne(g, SITE_SHORT, '{s}px "Alfa Slab One"', tw2, 46), midY = cardY + cardS / 2;
-      g.fillStyle = INK; g.font = `${l1}px "Alfa Slab One"`; g.fillText("SCAN TO SHOP", tx, midY - 14);
-      g.fillStyle = RED; g.font = `${l2}px "Alfa Slab One"`; g.fillText(SITE_SHORT, tx, midY + l2 + 4);
-      const s3 = fitOne(g, "Brampton, ON  •  Shipping across Canada", "800 {s}px Nunito", tw2, 28); g.fillStyle = "#555"; g.font = `800 ${s3}px Nunito`;
-      g.fillText("Brampton, ON  •  Shipping across Canada", tx, midY + l2 + 4 + s3 + 16);
-      $("fmtHint").textContent = F.label + " • uses " + Math.min(LAY.length, selected.length) + " of " + LAY.length + " picture spots";
+      const tx = cardX + cardS + 34, tw2 = W - 40 - tx; g.textAlign = "left";
+      const l1 = fitOne(g, "SCAN TO SHOP", '{s}px "Alfa Slab One"', tw2, 46), l2 = fitOne(g, SITE_SHORT, '{s}px "Alfa Slab One"', tw2, 40), midY = cardY + cardS / 2;
+      const s3 = fitOne(g, "Brampton, ON  •  Shipping across Canada", "800 {s}px Nunito", tw2, 26), blockH = l1 + l2 + s3 + 22, top = midY - blockH / 2;
+      g.fillStyle = INK; g.font = `${l1}px "Alfa Slab One"`; g.fillText("SCAN TO SHOP", tx, top + l1 * 0.85);
+      g.fillStyle = RED; g.font = `${l2}px "Alfa Slab One"`; g.fillText(SITE_SHORT, tx, top + l1 + 8 + l2 * 0.85);
+      g.fillStyle = "#555"; g.font = `800 ${s3}px Nunito`; g.fillText("Brampton, ON  •  Shipping across Canada", tx, top + l1 + l2 + 22 + s3 * 0.8);
+      $("fmtHint").textContent = F.label + " • uses " + Math.min(PLACE.length, selected.length) + " of " + PLACE.length + " picture spots";
     }
 
     // ---------- items + auto picks ----------

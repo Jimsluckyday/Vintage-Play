@@ -18,7 +18,7 @@
   <script src="/config.js"></script>
   <style>
     /* Splash page for Instagram / Facebook Marketplace / Kijiji. The PICTURES lead; the shop link is there but quiet. No prices (owner's rule).
-       Links:  /go   /go?category=toys   /go?category=toys&brand=transformers   &n=5 / 9 / 13 (how many pictures) */
+       Links:  /go   /go?category=toys   /go?category=toys&brand=transformers   &n=5 to 13 (how many pictures) */
     :root { --ink: #111; --yellow: #ffd21f; --red: #e4202d; --teal: #2f7d78; }
     * { box-sizing: border-box; }
     html { -webkit-text-size-adjust: 100%; }
@@ -39,16 +39,26 @@
 
     main { width: min(100% - 2rem, 760px); margin: 0 auto; padding-block: 0.6rem 2rem; }
 
-    /* the pictures lead: one big picture, then smaller ones */
-    .grid { margin-block: 1.1rem 1.2rem; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: clamp(0.5rem, 2.4vw, 1.1rem); }
-    .tile { --f: #ff3b5c; display: block; aspect-ratio: 1 / 1; border: 4px solid var(--ink); border-radius: 12px; overflow: hidden; box-shadow: 5px 5px 0 var(--ink); background: var(--f); padding: 6px; transition: transform 0.15s; }
-    .tile:first-child { grid-column: span 2; grid-row: span 2; padding: 10px; }
+    /* the pictures lead: a loose pile of tilted photos in mixed sizes, a little cluttered on purpose */
+    .grid { margin: 1.2rem -0.3rem 1.6rem; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; }
+    .tile { --f: #ff3b5c; --w: 30%; --r: 0deg; flex: none; width: var(--w); margin: -0.7rem -0.5rem; display: block; aspect-ratio: 1 / 1; border: 4px solid var(--ink); border-radius: 12px; overflow: hidden;
+      box-shadow: 5px 5px 0 var(--ink); background: var(--f); padding: 6px; transform: rotate(var(--r)); transition: transform 0.15s; position: relative; }
+    .tile:nth-child(1)  { --w: 50%; --r: -3deg; padding: 10px; z-index: 1; }
+    .tile:nth-child(2)  { --w: 34%; --r: 4deg; z-index: 2; }
+    .tile:nth-child(3)  { --w: 31%; --r: -5deg; z-index: 3; }
+    .tile:nth-child(4)  { --w: 29%; --r: -6deg; z-index: 4; }
+    .tile:nth-child(5)  { --w: 31%; --r: 5deg; z-index: 5; }
+    .tile:nth-child(6)  { --w: 34%; --r: 3deg; z-index: 6; }
+    .tile:nth-child(7)  { --w: 28%; --r: -4deg; z-index: 7; }
+    .tile:nth-child(8)  { --w: 30%; --r: 4deg; z-index: 8; }
+    .tile:nth-child(9)  { --w: 27%; --r: -5deg; z-index: 9; }
+    .tile:nth-child(10) { --w: 25%; --r: 3deg; z-index: 10; }
+    .tile:nth-child(11) { --w: 28%; --r: -4deg; z-index: 11; }
+    .tile:nth-child(12) { --w: 26%; --r: 5deg; z-index: 12; }
+    .tile:nth-child(13) { --w: 27%; --r: -3deg; z-index: 13; }
     .tile:nth-child(9n+2) { --f: #2b59ff; } .tile:nth-child(9n+3) { --f: #ffb703; } .tile:nth-child(9n+4) { --f: #06b6a4; } .tile:nth-child(9n+5) { --f: #8a2be2; }
     .tile:nth-child(9n+6) { --f: #ff7b00; } .tile:nth-child(9n+7) { --f: #e4202d; } .tile:nth-child(9n+8) { --f: #1d9bf0; } .tile:nth-child(9n+9) { --f: #ff5d8f; }
-    .tile:nth-child(3n+1) { transform: rotate(-1.2deg); }
-    .tile:nth-child(3n+2) { transform: rotate(1.3deg); }
-    .tile:nth-child(3n)   { transform: rotate(-0.8deg); }
-    .tile:hover { transform: rotate(0) scale(1.02); }
+    .tile:hover { transform: rotate(0) scale(1.04); z-index: 20; }
     .tile img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 4px; background: #eee; }
     @media (prefers-reduced-motion: reduce) { .tile { transition: none; } }
     .strap { text-align: center; margin: 0 auto 1.6rem; }
@@ -60,7 +70,7 @@
     .shop:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
     .qr-row { display: flex; flex-wrap: wrap; gap: 1.2rem; align-items: center; justify-content: center; }
     .qr-card { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; justify-content: center; }
-    .qr { width: 118px; background: #fff; border: 4px solid var(--ink); border-radius: 12px; padding: 6px; box-shadow: 5px 5px 0 #3a86ff; }
+    .qr { width: 92px; background: #fff; border: 4px solid var(--ink); border-radius: 12px; padding: 6px; box-shadow: 5px 5px 0 #3a86ff; }
     .qr svg { display: block; width: 100%; height: auto; }
     .qr-text { text-align: left; }
     .qr-text .k { color: #555; font-weight: 800; font-size: 0.9rem; }
@@ -188,9 +198,8 @@
       try {
         const items = await loadItems();
         if (items.length < 5) return;
-        const count = 1 + 4 * Math.floor((items.length - 1) / 4);   // one big picture + full rows of four
         const grid = document.getElementById("grid");
-        grid.innerHTML = items.slice(0, count).map((it) =>
+        grid.innerHTML = items.map((it) =>
           `<a class="tile" href="${esc(shopUrl(it.category, it.brand))}" aria-label="${esc(it.title)}"><img src="${esc(it.photo_urls[0])}" alt="${esc(it.title)}" loading="lazy" /></a>`).join("");
         grid.hidden = false;
       } catch (e) { /* the page still works without the pictures */ }
