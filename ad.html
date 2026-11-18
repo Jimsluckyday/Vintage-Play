@@ -162,26 +162,61 @@
       g.drawImage(im, x + (s - w) / 2, y + (s - h) / 2, w, h);
     }
 
+
+    // ---------- colourful (but quiet) white backdrop ----------
+    const PAL = ["#ff5d8f", "#ff9f1c", "#ffd21f", "#2ec4b6", "#3a86ff", "#8338ec"];
+    const FRAMES = ["#ff3b5c", "#2b59ff", "#ffb703", "#06b6a4", "#8a2be2", "#ff7b00", "#e4202d", "#1d9bf0", "#ff5d8f"];
+    const HEAD_COLORS = ["#2b59ff", "#ff3b3b", "#8a2be2"];
+    function hexA(h, a) { const n = parseInt(h.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; }
+    function rng(seed) { return function () { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+    function drawBackdrop(g, H) {
+      g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+      const glows = [[0, 0, PAL[0], 0.20, 760], [W, H * 0.26, PAL[4], 0.17, 680], [0, H * 0.62, PAL[2], 0.28, 760], [W, H, PAL[3], 0.24, 800], [W * 0.5, H * 0.5, PAL[5], 0.07, 600]];
+      glows.forEach(([x, y, c, a, r]) => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, hexA(c, a)); gr.addColorStop(1, hexA(c, 0)); g.fillStyle = gr; g.fillRect(0, 0, W, H); });
+      const R = rng(11), n = Math.round(W * H / 15000);
+      for (let i = 0; i < n; i++) {
+        const x = R() * W, y = R() * H, s = 14 + R() * 20, c = PAL[Math.floor(R() * PAL.length)], k = Math.floor(R() * 5), rot = R() * Math.PI * 2;
+        g.save(); g.translate(x, y); g.rotate(rot); g.globalAlpha = 0.34; g.strokeStyle = c; g.fillStyle = c; g.lineWidth = 5; g.lineCap = "round"; g.lineJoin = "round";
+        if (k === 0) { g.beginPath(); g.arc(0, 0, s / 2, 0, Math.PI * 2); g.fill(); }
+        else if (k === 1) { g.beginPath(); g.arc(0, 0, s / 2, 0, Math.PI * 2); g.stroke(); }
+        else if (k === 2) { g.beginPath(); g.moveTo(-s / 2, 0); g.lineTo(s / 2, 0); g.moveTo(0, -s / 2); g.lineTo(0, s / 2); g.stroke(); }
+        else if (k === 3) { g.beginPath(); g.moveTo(0, -s / 2); g.lineTo(s / 2, s / 2); g.lineTo(-s / 2, s / 2); g.closePath(); g.stroke(); }
+        else { g.beginPath(); g.moveTo(-s, 0); g.quadraticCurveTo(-s / 2, -s / 2, 0, 0); g.quadraticCurveTo(s / 2, s / 2, s, 0); g.stroke(); }
+        g.restore();
+      }
+    }
+
     async function render() {
       const F = FORMATS[fmt], H = F.H; cv.height = H;
       await Promise.all([document.fonts.load("100px Bangers"), document.fonts.load('60px "Alfa Slab One"'), document.fonts.load("800 30px Nunito")]);
       const g = ctx; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
-      g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
+      drawBackdrop(g, H);
 
-      // black band: logo + headline
-      g.fillStyle = INK; g.fillRect(0, 0, W, F.band);
-      g.fillStyle = YELLOW; g.fillRect(0, F.band, W, 10);
+      // logo on a colour sticker (the logo is yellow, so it needs a dark-ish colour behind it) + big colourful headline
       if (!logoImg) logoImg = await loadImage("/logo.png");
       let lx = 40;
-      if (logoImg) { const lh = F.logoH, lw = lh * logoImg.width / logoImg.height, ly = (F.band - lh) / 2; g.drawImage(logoImg, lx, ly, lw, lh); lx += lw + 36; }
+      if (logoImg) {
+        const lh = F.logoH, lw = lh * logoImg.width / logoImg.height, pad = 26, sw = lw + pad * 2, sh = lh + pad * 1.2, sy = Math.max(8, (F.band - sh) / 2 + 6);
+        g.save(); g.translate(40 + sw / 2, sy + sh / 2); g.rotate(-0.025); g.translate(-sw / 2, -sh / 2);
+        g.fillStyle = INK; rr(g, 9, 9, sw, sh, 22); g.fill();
+        const gr = g.createLinearGradient(0, 0, sw, sh); gr.addColorStop(0, "#2b59ff"); gr.addColorStop(1, "#8a2be2");
+        g.fillStyle = gr; rr(g, 0, 0, sw, sh, 22); g.fill(); g.lineWidth = 7; g.strokeStyle = INK; g.stroke();
+        g.drawImage(logoImg, pad, (sh - lh) / 2, lw, lh); g.restore();
+        lx = 40 + sw + 34;
+      }
       const headText = ($("headCustom").value.trim() || $("headSel").value).toUpperCase();
-      const hx = lx, hw = W - 40 - hx, fit = fitHeadline(g, headText, hw, F.band - 50, F.headFont);
-      g.textBaseline = "alphabetic"; g.textAlign = "left";
-      const lineH = fit.s * 0.98, total = lineH * fit.lines.length; let by = (F.band - total) / 2 + fit.s * 0.82;
-      fit.lines.forEach((ln, i) => { g.font = `${fit.s}px Bangers`; g.fillStyle = (fit.lines.length > 1 && i === fit.lines.length - 1) ? YELLOW : "#fff"; g.fillText(ln, hx, by); by += lineH; });
+      const hx = lx, hw = W - 40 - hx - 14, fit = fitHeadline(g, headText, hw, F.band - 40, F.headFont);
+      g.textBaseline = "alphabetic"; g.textAlign = "left"; g.lineJoin = "round";
+      const lineH = fit.s * 0.98, total = lineH * fit.lines.length; let by = (F.band - total) / 2 + fit.s * 0.84 + 4;
+      fit.lines.forEach((ln, i) => {
+        g.font = `${fit.s}px Bangers`;
+        g.fillStyle = INK; g.fillText(ln, hx + 6, by + 6);
+        g.lineWidth = Math.max(8, fit.s * 0.1); g.strokeStyle = INK; g.strokeText(ln, hx, by);
+        g.fillStyle = HEAD_COLORS[i % HEAD_COLORS.length]; g.fillText(ln, hx, by); by += lineH;
+      });
 
       // pictures
-      const cols = 3, gap = 26, tile = 316, rows = F.rows, mTop = F.band + (fmt === "story" ? 50 : 40);
+      const cols = 3, gap = 26, tile = 316, rows = F.rows, mTop = F.band + (fmt === "story" ? 40 : 34);
       const want = cols * rows, use = selected.slice(0, want);
       const imgs = await Promise.all(use.map((it) => loadImage(photoSrc(it.photo_urls[0]))));
       const tilts = [-1.8, 1.4, -1.0, 1.6, -1.4, 1.0, -0.8, 1.8, -1.6];
@@ -191,7 +226,8 @@
         g.fillStyle = INK; rr(g, 9, 9, tile, tile, 12); g.fill();
         g.save(); rr(g, 0, 0, tile, tile, 12); g.clip(); g.fillStyle = "#eee"; g.fillRect(0, 0, tile, tile);
         if (imgs[i]) drawCover(g, imgs[i], 0, 0, tile); g.restore();
-        g.lineWidth = 7; g.strokeStyle = INK; rr(g, 0, 0, tile, tile, 12); g.stroke(); g.restore();
+        g.lineWidth = 16; g.strokeStyle = FRAMES[i % FRAMES.length]; rr(g, 8, 8, tile - 16, tile - 16, 8); g.stroke();
+        g.lineWidth = 5; g.strokeStyle = INK; rr(g, 0, 0, tile, tile, 12); g.stroke(); g.restore();
       }
       const mBottom = mTop + rows * tile + (rows - 1) * gap;
 
@@ -205,13 +241,13 @@
 
       // QR card + call to action
       const bTop = sBase + 44, bBot = H - 40, cardS = Math.min(380, bBot - bTop), cardX = 40, cardY = bTop + (bBot - bTop - cardS) / 2;
-      g.fillStyle = INK; rr(g, cardX + 8, cardY + 8, cardS, cardS, 18); g.fill();
+      g.fillStyle = "#3a86ff"; rr(g, cardX + 9, cardY + 9, cardS, cardS, 18); g.fill();
       g.fillStyle = "#fff"; rr(g, cardX, cardY, cardS, cardS, 18); g.fill(); g.lineWidth = 7; g.strokeStyle = INK; g.stroke();
       const pad = Math.round(cardS * 0.07); qrDraw(g, SITE + "/", cardX + pad, cardY + pad, cardS - pad * 2);
       g.save(); g.translate(cardX + cardS - 8, cardY + cardS - 14); g.rotate(-0.2); star(g, 0, 0, 56, 38, 12); g.fillStyle = YELLOW; g.fill(); g.lineWidth = 5; g.strokeStyle = INK; g.stroke();
       g.fillStyle = INK; g.font = "27px Bangers"; g.textAlign = "center"; g.fillText("SCAN", 0, -1); g.fillText("ME!", 0, 25); g.restore();
 
-      const tx = cardX + cardS + 44, tw2 = W - 40 - tx; g.textAlign = "left";
+      const tx = cardX + cardS + 76, tw2 = W - 40 - tx; g.textAlign = "left";
       const l1 = fitOne(g, "SCAN TO SHOP", '{s}px "Alfa Slab One"', tw2, 70), l2 = fitOne(g, SITE_SHORT, '{s}px "Alfa Slab One"', tw2, 60);
       const midY = cardY + cardS / 2; g.fillStyle = INK; g.font = `${l1}px "Alfa Slab One"`; g.fillText("SCAN TO SHOP", tx, midY - 20);
       g.fillStyle = RED; g.font = `${l2}px "Alfa Slab One"`; g.fillText(SITE_SHORT, tx, midY + l2 + 4);

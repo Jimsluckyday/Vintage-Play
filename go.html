@@ -22,15 +22,21 @@
     :root { --ink: #111; --yellow: #ffd21f; --red: #e4202d; --teal: #2f7d78; }
     * { box-sizing: border-box; }
     html { -webkit-text-size-adjust: 100%; }
-    body { margin: 0; font-family: 'Nunito', system-ui, -apple-system, sans-serif; background: #fff; color: var(--ink); line-height: 1.4; }
+    body { margin: 0; font-family: 'Nunito', system-ui, -apple-system, sans-serif; color: var(--ink); line-height: 1.4;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' fill='none' stroke-width='5' stroke-linecap='round' stroke-linejoin='round' opacity='.34'%3E%3Ccircle cx='30' cy='40' r='9' fill='%23ff5d8f' stroke='none'/%3E%3Ccircle cx='160' cy='28' r='10' stroke='%232ec4b6'/%3E%3Cpath d='M214 60h26M227 47v26' stroke='%233a86ff'/%3E%3Cpath d='M70 120l14-24 14 24z' stroke='%23ff9f1c'/%3E%3Cpath d='M20 190q12-12 24 0t24 0' stroke='%238338ec'/%3E%3Ccircle cx='190' cy='150' r='8' fill='%23ffd21f' stroke='none'/%3E%3Cpath d='M120 210h24M132 198v24' stroke='%23ff5d8f'/%3E%3Ccircle cx='235' cy='225' r='9' stroke='%233a86ff'/%3E%3Cpath d='M150 120q12-12 24 0t24 0' stroke='%232ec4b6'/%3E%3C/svg%3E"),
+        radial-gradient(circle at 0% 0%, rgba(255,93,143,.20), transparent 46%), radial-gradient(circle at 100% 24%, rgba(58,134,255,.17), transparent 46%),
+        radial-gradient(circle at 0% 64%, rgba(255,210,31,.27), transparent 46%), radial-gradient(circle at 100% 100%, rgba(46,196,182,.24), transparent 48%), #fff;
+      background-attachment: scroll; }
     a { color: inherit; }
     :focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
 
-    .band { background: var(--ink); border-bottom: 10px solid var(--yellow); }
+    .band { background: none; }
     .band-in { width: min(100% - 2rem, 760px); margin: 0 auto; display: flex; align-items: center; gap: clamp(0.8rem, 4vw, 2rem); padding-block: 1rem; }
-    .band img { width: clamp(120px, 30vw, 230px); height: auto; flex: none; }
-    .band h1 { margin: 0; font-family: 'Bangers', cursive; font-weight: 400; letter-spacing: 0.02em; line-height: 0.95; font-size: clamp(2.4rem, 11vw, 5rem); color: #fff; }
-    .band h1 span { display: block; color: var(--yellow); }
+    .sticker { flex: none; background: linear-gradient(135deg, #2b59ff, #8a2be2); border: 5px solid var(--ink); border-radius: 18px; box-shadow: 7px 7px 0 var(--ink); padding: 0.6rem 0.8rem; transform: rotate(-1.8deg); }
+    .band img { display: block; width: clamp(110px, 28vw, 210px); height: auto; }
+    .band h1 { margin: 0; font-family: 'Bangers', cursive; font-weight: 400; letter-spacing: 0.02em; line-height: 0.95; font-size: clamp(2.4rem, 11vw, 5rem); color: #2b59ff;
+      -webkit-text-stroke: 0.09em var(--ink); paint-order: stroke fill; text-shadow: 0.06em 0.06em 0 var(--ink); }
+    .band h1 span { display: block; color: #ff3b3b; }
 
     main { width: min(100% - 2rem, 760px); margin: 0 auto; padding-block: 1.6rem 2.2rem; }
     .cta { display: block; text-align: center; text-decoration: none; background: var(--yellow); color: var(--ink); border: 4px solid var(--ink); border-radius: 14px; padding: 1rem 1rem 0.9rem;
@@ -40,19 +46,21 @@
     .cta small { display: block; margin-top: 0.15rem; font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 0.95rem; color: #444; }
 
     .grid { margin-block: 2rem 1.2rem; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(0.6rem, 3vw, 1.4rem); }
-    .tile { display: block; aspect-ratio: 1 / 1; border: 4px solid var(--ink); border-radius: 12px; overflow: hidden; box-shadow: 6px 6px 0 var(--ink); background: #eee; transition: transform 0.15s; }
+    .tile { --f: #ff3b5c; display: block; aspect-ratio: 1 / 1; border: 4px solid var(--ink); border-radius: 12px; overflow: hidden; box-shadow: 6px 6px 0 var(--ink); background: var(--f); padding: 8px; transition: transform 0.15s; }
+    .tile:nth-child(9n+2) { --f: #2b59ff; } .tile:nth-child(9n+3) { --f: #ffb703; } .tile:nth-child(9n+4) { --f: #06b6a4; } .tile:nth-child(9n+5) { --f: #8a2be2; }
+    .tile:nth-child(9n+6) { --f: #ff7b00; } .tile:nth-child(9n+7) { --f: #e4202d; } .tile:nth-child(9n+8) { --f: #1d9bf0; } .tile:nth-child(9n+9) { --f: #ff5d8f; }
     .tile:nth-child(3n+1) { transform: rotate(-1.6deg); }
     .tile:nth-child(3n+2) { transform: rotate(1.3deg); }
     .tile:nth-child(3n)   { transform: rotate(-0.9deg); }
     .tile:hover { transform: rotate(0) scale(1.03); }
-    .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .tile img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 4px; background: #eee; }
     @media (prefers-reduced-motion: reduce) { .tile { transition: none; } }
     .strap { text-align: center; margin: 0 auto 2rem; }
     .strap span { display: inline-block; background: var(--yellow); padding: 0.1rem 0.9rem; font-family: 'Bangers', cursive; font-size: clamp(1.4rem, 6vw, 2.2rem); letter-spacing: 0.03em; transform: rotate(-0.6deg); }
 
     .qr-row { display: flex; flex-wrap: wrap; gap: 1.4rem; align-items: center; justify-content: center; }
     .qr-card { position: relative; display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap; justify-content: center; }
-    .qr { width: 190px; background: #fff; border: 5px solid var(--ink); border-radius: 14px; padding: 8px; box-shadow: 6px 6px 0 var(--ink); }
+    .qr { width: 190px; background: #fff; border: 5px solid var(--ink); border-radius: 14px; padding: 8px; box-shadow: 7px 7px 0 #3a86ff; }
     .qr svg { display: block; width: 100%; height: auto; }
     .qr-text { text-align: left; }
     .qr-text h2 { margin: 0; font-family: 'Alfa Slab One', serif; font-weight: 400; font-size: clamp(1.5rem, 6vw, 2.2rem); line-height: 1.05; }
@@ -71,7 +79,7 @@
 <body>
   <div class="band">
     <div class="band-in">
-      <img src="/logo.png" alt="Vintage Play Collectables" width="687" height="480" />
+      <div class="sticker"><img src="/logo.png" alt="Vintage Play Collectables" width="687" height="480" /></div>
       <h1 id="headline">Remember <span>these?</span></h1>
     </div>
   </div>
