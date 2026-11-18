@@ -67,6 +67,14 @@
         <select id="headSel" aria-label="Headline"></select>
         <input type="text" id="headCustom" placeholder="Or type your own headline" style="margin-top:0.4rem;" />
         <input type="text" id="subText" value="Retro games &bull; Comics &bull; Toys &bull; Collectibles" style="margin-top:0.4rem;" aria-label="Line under the pictures" />
+        <select id="logoBg" aria-label="Colour behind the logo" style="margin-top:0.4rem;">
+          <option value="blue">Logo backdrop: blue (current)</option>
+          <option value="white">Logo backdrop: white</option>
+          <option value="grey">Logo backdrop: soft neutral grey</option>
+          <option value="cream">Logo backdrop: warm cream</option>
+          <option value="mid">Logo backdrop: mid grey</option>
+          <option value="charcoal">Logo backdrop: charcoal</option>
+        </select>
       </div>
 
       <div>
@@ -205,6 +213,20 @@
       }
     }
 
+    // backdrop behind the logo. The logo is yellow with a WHITE tagline, so on the light backdrops the tagline is turned near-black.
+    const LOGO_BG = { white: "#ffffff", grey: "#e8e8ec", cream: "#f6f0e4", mid: "#96989e", charcoal: "#2e2e34" }, LIGHT_BG = ["white", "grey", "cream"];
+    let darkLogo = null;
+    function logoFor(kind) {
+      if (!logoImg || !LIGHT_BG.includes(kind)) return logoImg;
+      if (!darkLogo) {
+        const c = document.createElement("canvas"); c.width = logoImg.width; c.height = logoImg.height;
+        const x = c.getContext("2d"); x.drawImage(logoImg, 0, 0); const d = x.getImageData(0, 0, c.width, c.height), p = d.data;
+        for (let i = 0; i < p.length; i += 4) if (p[i + 3] > 0 && p[i] > 150 && p[i + 1] > 150 && p[i + 2] > 150) { p[i] = 17; p[i + 1] = 17; p[i + 2] = 17; }
+        x.putImageData(d, 0, 0); darkLogo = c;
+      }
+      return darkLogo;
+    }
+
     async function render() {
       const F = FORMATS[fmt], H = F.H, PLACE = PLACEMENTS[fmt]; cv.height = H;
       await Promise.all([document.fonts.load("100px Bangers"), document.fonts.load('60px "Alfa Slab One"'), document.fonts.load("800 30px Nunito")]);
@@ -217,10 +239,11 @@
       if (logoImg) {
         const lh = F.logoH, lw = lh * logoImg.width / logoImg.height, pad = 18, sw = lw + pad * 2, sh = lh + pad * 1.1, sy = Math.max(10, (F.band - sh) / 2);
         g.save(); g.translate(40 + sw / 2, sy + sh / 2); g.rotate(-0.025); g.translate(-sw / 2, -sh / 2);
-        g.fillStyle = INK; rr(g, 7, 7, sw, sh, 18); g.fill();
-        const gr = g.createLinearGradient(0, 0, sw, sh); gr.addColorStop(0, "#2b59ff"); gr.addColorStop(1, "#8a2be2");
-        g.fillStyle = gr; rr(g, 0, 0, sw, sh, 18); g.fill(); g.lineWidth = 6; g.strokeStyle = INK; g.stroke();
-        g.drawImage(logoImg, pad, (sh - lh) / 2, lw, lh); g.restore();
+        const kind = $("logoBg").value;
+        g.fillStyle = INK; rr(g, 5, 5, sw, sh, 18); g.fill();
+        if (LOGO_BG[kind]) g.fillStyle = LOGO_BG[kind]; else { const gr = g.createLinearGradient(0, 0, sw, sh); gr.addColorStop(0, "#2b59ff"); gr.addColorStop(1, "#8a2be2"); g.fillStyle = gr; }
+        rr(g, 0, 0, sw, sh, 18); g.fill(); g.lineWidth = 4; g.strokeStyle = INK; g.stroke();
+        g.drawImage(logoFor(kind), pad, (sh - lh) / 2, lw, lh); g.restore();
         lx = 40 + sw + 30;
       }
       const headText = ($("headCustom").value.trim() || $("headSel").value).toUpperCase();
@@ -238,13 +261,13 @@
       const use = selected.slice(0, PLACE.length);
       const imgs = await Promise.all(use.map((it) => loadImage(photoSrc(it.photo_urls[0]))));
       for (let i = 0; i < PLACE.length; i++) {
-        const [x, y, sz, rot] = PLACE[i], fw = sz > 380 ? 22 : sz > 270 ? 18 : 14;
+        const [x, y, sz, rot] = PLACE[i], fw = sz > 380 ? 9 : 7;
         g.save(); g.translate(x + sz / 2, y + sz / 2); g.rotate((rot * Math.PI) / 180); g.translate(-sz / 2, -sz / 2);
-        g.fillStyle = INK; rr(g, 8, 8, sz, sz, 12); g.fill();
-        g.save(); rr(g, 0, 0, sz, sz, 12); g.clip(); g.fillStyle = "#eee"; g.fillRect(0, 0, sz, sz);
+        g.fillStyle = INK; rr(g, 5, 5, sz, sz, 10); g.fill();
+        g.save(); rr(g, 0, 0, sz, sz, 10); g.clip(); g.fillStyle = "#eee"; g.fillRect(0, 0, sz, sz);
         if (imgs[i]) drawCover(g, imgs[i], 0, 0, sz); g.restore();
-        g.lineWidth = fw; g.strokeStyle = FRAMES[i % FRAMES.length]; rr(g, fw / 2, fw / 2, sz - fw, sz - fw, 8); g.stroke();
-        g.lineWidth = 5; g.strokeStyle = INK; rr(g, 0, 0, sz, sz, 12); g.stroke(); g.restore();
+        g.lineWidth = fw; g.strokeStyle = FRAMES[i % FRAMES.length]; rr(g, fw / 2, fw / 2, sz - fw, sz - fw, 6); g.stroke();
+        g.lineWidth = 3; g.strokeStyle = INK; rr(g, 0, 0, sz, sz, 10); g.stroke(); g.restore();
       }
 
       // line under the pictures
@@ -319,7 +342,7 @@
     document.querySelectorAll("#fmtRow button").forEach((b) => b.addEventListener("click", () => {
       fmt = b.dataset.fmt; document.querySelectorAll("#fmtRow button").forEach((x) => x.classList.toggle("on", x === b)); render();
     }));
-    ["headSel", "headCustom", "subText"].forEach((id) => $(id).addEventListener("input", render));
+    ["headSel", "headCustom", "subText", "logoBg"].forEach((id) => $(id).addEventListener("input", render));
     $("findBox").addEventListener("input", drawLists);
     $("shuffleBtn").addEventListener("click", () => { autoPick(); refresh(); });
     $("clearBtn").addEventListener("click", () => { selected = []; refresh(); });
