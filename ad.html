@@ -185,18 +185,23 @@
       g.fillStyle = "#fff"; g.fillRect(0, 0, W, H);
       const glows = [[0, 0, PAL[0], 0.20, 760], [W, H * 0.26, PAL[4], 0.17, 680], [0, H * 0.62, PAL[2], 0.28, 760], [W, H, PAL[3], 0.24, 800], [W * 0.5, H * 0.5, PAL[5], 0.07, 600]];
       glows.forEach(([x, y, c, a, r]) => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, hexA(c, a)); gr.addColorStop(1, hexA(c, 0)); g.fillStyle = gr; g.fillRect(0, 0, W, H); });
-      // classic PlayStation button symbols in a tidy, even pattern (triangle green, circle red, cross blue, square pink), faint so the pictures stay the stars
-      const PS = [["#2fbf71", "tri"], ["#e4202d", "circle"], ["#3a86ff", "cross"], ["#ff5d8f", "square"]], step = 170, sz = 36;
-      for (let row = 0, y = 70; y < H + step; row++, y += step) {
-        for (let col = 0, x = 60 + (row % 2) * (step / 2); x < W + step; col++, x += step) {
-          const [c, k] = PS[(col + row * 2) % 4];
-          g.save(); g.translate(x, y); g.globalAlpha = 0.26; g.strokeStyle = c; g.lineWidth = 7; g.lineCap = "round"; g.lineJoin = "round"; g.beginPath();
-          if (k === "tri") { g.moveTo(0, -sz * 0.6); g.lineTo(sz * 0.55, sz * 0.42); g.lineTo(-sz * 0.55, sz * 0.42); g.closePath(); }
-          else if (k === "circle") { g.arc(0, 0, sz * 0.5, 0, Math.PI * 2); }
-          else if (k === "cross") { g.moveTo(-sz * 0.45, -sz * 0.45); g.lineTo(sz * 0.45, sz * 0.45); g.moveTo(sz * 0.45, -sz * 0.45); g.lineTo(-sz * 0.45, sz * 0.45); }
-          else { g.rect(-sz * 0.45, -sz * 0.45, sz * 0.9, sz * 0.9); }
-          g.stroke(); g.restore();
-        }
+      // classic PlayStation button symbols (triangle green, circle red, cross blue, square pink): scattered with small tilts and mixed sizes, but kept evenly spread
+      // (a minimum distance between them) so they never jumble together; faint so the pictures stay the stars
+      const PS = { tri: "#2fbf71", circle: "#e4202d", cross: "#3a86ff", square: "#ff5d8f" }, R = rng(23), pts = [], minD = 150;
+      for (let t = 0; t < 8000 && pts.length < 140; t++) {
+        const x = R() * (W + 40) - 20, y = R() * (H + 40) - 20;
+        if (pts.every((p) => Math.hypot(p[0] - x, p[1] - y) >= minD)) pts.push([x, y]);
+      }
+      let bag = [];
+      for (const [x, y] of pts) {
+        if (!bag.length) { bag = ["tri", "circle", "cross", "square"]; for (let i = 3; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; } }
+        const k = bag.pop(), sz = 30 + R() * 18, rot = (R() - 0.5) * 0.7;
+        g.save(); g.translate(x, y); g.rotate(rot); g.globalAlpha = 0.26; g.strokeStyle = PS[k]; g.lineWidth = 7; g.lineCap = "round"; g.lineJoin = "round"; g.beginPath();
+        if (k === "tri") { g.moveTo(0, -sz * 0.6); g.lineTo(sz * 0.55, sz * 0.42); g.lineTo(-sz * 0.55, sz * 0.42); g.closePath(); }
+        else if (k === "circle") { g.arc(0, 0, sz * 0.5, 0, Math.PI * 2); }
+        else if (k === "cross") { g.moveTo(-sz * 0.45, -sz * 0.45); g.lineTo(sz * 0.45, sz * 0.45); g.moveTo(sz * 0.45, -sz * 0.45); g.lineTo(-sz * 0.45, sz * 0.45); }
+        else { g.rect(-sz * 0.45, -sz * 0.45, sz * 0.9, sz * 0.9); }
+        g.stroke(); g.restore();
       }
     }
 
