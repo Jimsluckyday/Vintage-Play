@@ -1384,3 +1384,58 @@ header { position: relative; }
 .maker-switch button { font-size: 0.8rem; padding: 0.25rem 0.8rem; border-width: 2px; background: #fff; }
 .maker-switch button.active { background: var(--teal); color: #fff; border-color: var(--ink); }
 .maker-switch[hidden] { display: none; }
+
+/* ---- Admin section tabs: one group of sections at a time instead of one long page ---- */
+.admin-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  gap: 0.35rem;
+  max-width: 1100px;
+  margin: 0 auto 1.25rem;
+  padding: 0.5rem 1rem 0;
+  background: var(--bg);
+  border-bottom: 3px solid var(--ink);
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-tab {
+  flex: 0 0 auto;
+  font-family: 'Bangers', cursive;
+  font-size: 1.1rem;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+  background: var(--bg-card);
+  border: 2px solid var(--ink);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 0.45rem 0.9rem 0.4rem;
+  cursor: pointer;
+}
+
+.admin-tab:hover { background: #fff3d6; }
+
+.admin-tab.active {
+  background: var(--brick);
+  color: #fffaf0;
+  position: relative;
+  top: 3px;
+  padding-bottom: 0.55rem;
+}
+
+.admin-tab:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+
+.admin-tab .tab-n {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 800;
+  font-size: 0.8rem;
+  letter-spacing: 0;
+  opacity: 0.85;
+}
+
+@media (max-width: 600px) {
+  .admin-tab { font-size: 1rem; padding: 0.4rem 0.65rem 0.35rem; }
+}

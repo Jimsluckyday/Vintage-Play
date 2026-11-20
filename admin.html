@@ -36,7 +36,16 @@
       <button class="btn secondary" id="logoutBtn">Log Out</button>
     </div>
 
-    <div class="section" id="promoSection">
+    <nav class="admin-tabs" id="adminTabs" role="tablist" aria-label="Admin sections">
+      <button type="button" class="admin-tab" role="tab" data-tab-btn="inventory">Inventory <span class="tab-n" id="tabItemN"></span></button>
+      <button type="button" class="admin-tab" role="tab" data-tab-btn="item">Add / Edit Item</button>
+      <button type="button" class="admin-tab" role="tab" data-tab-btn="orders">Orders <span class="tab-n" id="tabOrderN"></span></button>
+      <button type="button" class="admin-tab" role="tab" data-tab-btn="promos">Sales &amp; Coupons</button>
+      <button type="button" class="admin-tab" role="tab" data-tab-btn="reports">Reports</button>
+      <button type="button" class="admin-tab" role="tab" data-tab-btn="setup">Setup</button>
+    </nav>
+
+    <div class="section" id="promoSection" data-tab="promos">
       <h2>Sales &amp; Promo Codes (<span id="promoCount">0</span>)</h2>
       <p class="hint">A <strong>sale</strong> lowers prices automatically for everyone while it's ON. A <strong>promo code</strong> only works when a shopper types it into the cart (or opens a link/QR code ending in <code>?code=YOURCODE</code>). Your listed prices never change &mdash; turning a sale OFF puts everything back instantly. Where discounts overlap, the biggest single one wins.</p>
       <input type="text" id="promoSearch" placeholder="Search sales and codes..." />
@@ -98,7 +107,7 @@
       </details>
     </div>
 
-    <div class="section" id="thanksSection">
+    <div class="section" id="thanksSection" data-tab="promos">
       <h2>Thank-You Coupons (<span id="thanksCount">0</span>)</h2>
       <p class="hint">One flyer goes in each package. Every flyer gets its <strong>own code</strong> that works <strong>once</strong>, so you can see exactly how many come back. The flyer sheet prints <strong>6 to a letter page</strong> in colour: on the sheet page choose Print, then <em>Save as PDF</em>, and upload that PDF to Staples (ask them to cut it into 6).</p>
       <div style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
@@ -130,7 +139,7 @@
       <div id="thanksList" style="margin-top:0.5rem;"></div>
     </div>
 
-    <div class="section">
+    <div class="section" data-tab="orders">
       <h2>Orders (<span id="orderCount">0</span>)</h2>
       <p class="hint">Requests buyers submit from the cart. You should also get an email for each one — this list is the backup record.</p>
       <div class="btn-row">
@@ -140,7 +149,7 @@
       <div id="orderList"></div>
     </div>
 
-    <div class="section">
+    <div class="section" data-tab="orders">
       <h2>Customers (<span id="customerCount">0</span>)</h2>
       <p class="hint">Built from the order list: orders from the same email (or the same name, when there's no email) are added up. <strong>Spent</strong> counts orders you've marked <em>Fulfilled</em> (paid and done); <strong>Open</strong> is New/Contacted orders still waiting. Cancelled orders are ignored. Sales made outside the site (Kijiji, in person) only show here if they came in as an order.</p>
       <details id="offlineSaleBox" style="margin:0.5rem 0 0.9rem;">
@@ -165,7 +174,7 @@
       <div id="customerList"></div>
     </div>
 
-    <div class="section">
+    <div class="section" data-tab="setup">
       <h2>Categories</h2>
       <label for="newCategoryLabel">Category Name</label>
       <input type="text" id="newCategoryLabel" placeholder="e.g. Books" />
@@ -176,7 +185,7 @@
       <div class="btn-row" id="categoryManager" style="margin-top:0.75rem;"></div>
     </div>
 
-    <div class="section">
+    <div class="section" data-tab="setup">
       <h2>Groups</h2>
       <p class="hint">Manufacturer-style groupings a subcategory can collapse under (e.g. "Sega" so Genesis/32X/Saturn nest under one heading instead of listing dozens of platforms at once). Picked from a list everywhere else so a typo can never split one manufacturer into two — no photo needed for these.</p>
       <label for="groupCategory">Category this belongs to</label>
@@ -188,7 +197,7 @@
       <div class="btn-row" id="groupManager" style="margin-top:0.75rem;"></div>
     </div>
 
-    <div class="section">
+    <div class="section" data-tab="setup">
       <h2>Subcategories</h2>
       <p class="hint">Optional sub-grouping within a category — e.g. DC / Marvel / Image within Comics, or Sega Master System / NES / Arcade within Video Games. Shown as cover-photo tiles or a dropdown depending on that category's setting above.</p>
       <label for="brandCategory">Category this belongs to</label>
@@ -206,7 +215,7 @@
       <div class="btn-row" id="brandManager" style="margin-top:0.75rem;"></div>
     </div>
 
-    <div class="section">
+    <div class="section" data-tab="setup">
       <h2>Item Types</h2>
       <p class="hint">Only used by categories set to the "Tree" browsing style above — a top-level split like Consoles / Games / Accessories within Video Games. Categories on Tiles or Dropdown don't need these.</p>
       <label for="itemTypeCategory">Category this belongs to</label>
@@ -218,7 +227,7 @@
       <div class="btn-row" id="itemTypeManager" style="margin-top:0.75rem;"></div>
     </div>
 
-    <div class="section">
+    <div class="section" data-tab="item">
       <h2 id="formTitle">Add New Item</h2>
       <label for="title">Title</label>
       <input type="text" id="title" />
@@ -303,7 +312,7 @@
       <p class="hint" id="uploadNote" style="font-weight:700;"></p>
     </div>
 
-    <div class="section">
+    <div class="section" data-tab="item">
       <h2>Bulk Import (CSV)</h2>
       <p class="hint">Upload a CSV with these columns: <code>title, category, brand, condition_grade, release_year, highlight_note, condition_notes, description, cost_basis, asking_price, quantity, status</code> (<code>brand</code>, <code>condition_grade</code>, <code>release_year</code>, and <code>highlight_note</code> are all optional). The <code>category</code> value must match an existing category slug (e.g. <code>comics</code>), and <code>brand</code> must match an existing brand slug — add those first above if they don't exist yet. Items import with no photo and show up in the compact list view on the catalog page until you add photos individually. Rows whose title exactly matches an item already in your inventory are skipped automatically (use the <code>quantity</code> column for multiple copies of the same item instead of separate rows).</p>
       <input type="file" id="bulkImportFile" accept=".csv" />
@@ -312,7 +321,7 @@
       <p class="error-text" id="bulkImportError" hidden></p>
     </div>
 
-    <div class="section">
+    <div class="section" data-tab="setup">
       <h2>Photo Storage</h2>
       <p class="hint">Older photos were uploaded at full phone size (3-8 MB each), which is what eats Supabase's free storage and bandwidth. This scans for photos over 500 KB, then shrinks each one to 1600px (same look on the site), swaps it into its listing, and deletes the big original. It runs in this browser, one photo at a time, and you can stop it and resume later &mdash; photos already shrunk are skipped on the next scan.</p>
       <div class="btn-row">
@@ -324,7 +333,7 @@
       <p class="hint" id="photoOptStatus"></p>
     </div>
 
-    <div class="section">
+    <div class="section" data-tab="reports">
       <h2>Inventory Summary</h2>
       <div class="stat-grid" id="inventoryStatGrid"></div>
       <table class="summary-table" id="inventoryCategoryTable"></table>
@@ -332,7 +341,7 @@
       <table class="summary-table" id="inventoryBrandTable"></table>
     </div>
 
-    <div class="section">
+    <div class="section" data-tab="reports">
       <h2>Sales Report</h2>
       <p class="hint">Built from your sales log: every sale recorded here (website orders you marked sold, and Kijiji, eBay, Facebook and in-person sales) with the price actually charged and the cost at the time. A sale only appears once it has been recorded with <em>Record sale &amp; remove from inventory</em>, <em>Log an offline sale</em> or the Sell button on an item. Taxes (HST) aren&rsquo;t worked out here &mdash; the Excel download lists every sale with its date so your accountant can do that.</p>
       <div class="btn-row" style="align-items:center;">
@@ -365,7 +374,7 @@
       <table class="summary-table" id="reportTopTable"></table>
     </div>
 
-    <div class="section">
+    <div class="section" data-tab="inventory">
       <h2>Inventory (<span id="itemCount">0</span>)</h2>
       <div class="btn-row">
         <button type="button" class="btn secondary" id="exportInventoryXlsxBtn">Download inventory workbook (Excel, with summary)</button>
@@ -928,9 +937,61 @@
       adminView.hidden = true;
     }
 
+    // ---- Section tabs (one section group at a time instead of one long page) ----
+    const ADMIN_TABS = ["inventory", "item", "orders", "promos", "reports", "setup"];
+    let currentTab = null;
+    const tabScroll = {};
+
+    function storedTab() {
+      try { return localStorage.getItem("adminTab"); } catch (err) { return null; }
+    }
+
+    function showTab(name, opts) {
+      if (!ADMIN_TABS.includes(name)) name = "inventory";
+      if (currentTab) tabScroll[currentTab] = window.scrollY;
+      currentTab = name;
+      document.querySelectorAll("#adminView [data-tab]").forEach((el) => {
+        el.hidden = el.dataset.tab !== name;
+      });
+      document.querySelectorAll("#adminTabs [data-tab-btn]").forEach((btn) => {
+        const on = btn.dataset.tabBtn === name;
+        btn.classList.toggle("active", on);
+        btn.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      try { localStorage.setItem("adminTab", name); } catch (err) { /* private window: the tab just isn't remembered */ }
+      if (history.replaceState) history.replaceState(null, "", "#" + name);
+      const top = opts && opts.top;
+      window.scrollTo({ top: top ? 0 : (tabScroll[name] || 0) });
+    }
+
+    document.getElementById("adminTabs").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-tab-btn]");
+      if (btn) showTab(btn.dataset.tabBtn, { top: true });
+    });
+    window.addEventListener("hashchange", () => {
+      const h = location.hash.replace("#", "");
+      if (ADMIN_TABS.includes(h) && h !== currentTab) showTab(h, { top: true });
+    });
+
+    // Show the item and order counts on their tabs (the headings already keep them up to date).
+    function syncTabCounts() {
+      const pairs = [["itemCount", "tabItemN"], ["orderCount", "tabOrderN"]];
+      pairs.forEach(([from, to]) => {
+        const src = document.getElementById(from);
+        const dst = document.getElementById(to);
+        if (src && dst) dst.textContent = src.textContent && src.textContent !== "0" ? `(${src.textContent})` : "";
+      });
+    }
+    ["itemCount", "orderCount"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) new MutationObserver(syncTabCounts).observe(el, { childList: true, characterData: true, subtree: true });
+    });
+
     function showAdmin() {
       loginView.hidden = true;
       adminView.hidden = false;
+      const fromLink = location.hash.replace("#", "");
+      showTab(ADMIN_TABS.includes(fromLink) ? fromLink : (storedTab() || "inventory"), { top: true });
       loadSales().then(loadItems);
       loadOrders();
       loadPromos();
@@ -2888,10 +2949,11 @@
       document.getElementById("photos").value = "";
       renderPhotoManager();
       document.getElementById("cancelEditBtn").hidden = false;
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      showTab("item", { top: true });
     }
 
     function resetForm() {
+      const wasEditing = !!editingId;
       editingId = null;
       editingPhotos.forEach((e) => e.preview && URL.revokeObjectURL(e.preview));
       editingPhotos = [];
@@ -2918,6 +2980,8 @@
       document.getElementById("photos").value = "";
       renderPhotoManager();
       document.getElementById("cancelEditBtn").hidden = true;
+      // After saving or cancelling an EDIT, go back to the inventory list where you were.
+      if (wasEditing) showTab("inventory");
     }
 
     document.getElementById("cancelEditBtn").addEventListener("click", resetForm);
