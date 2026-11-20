@@ -2978,6 +2978,11 @@
             headers: { Authorization: `Bearer ${data.session.access_token}` },
             body: form,
           });
+          // A 5xx is R2 or Cloudflare hiccuping for a moment: wait and try again.
+          if (resp.status >= 500 && resp.status !== 503 && attempt < 3) {
+            await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+            continue;
+          }
           break;
         } catch (err) {
           if (attempt >= 3) {
@@ -2995,7 +3000,13 @@
         } catch (err) {
           // non-JSON response (e.g. the function isn't deployed) -- keep statusText
         }
-        throw new Error(`${resp.status}: ${detail}`);
+        const failure = new Error(`${resp.status}: ${detail || "R2 had a temporary problem"}`);
+        // A 5xx that survived the retries is temporary: skip R2 for this one
+        // photo only, so the rest of the batch still tries R2 (otherwise one
+        // blip would send every remaining photo to Supabase storage).
+        // (503 is the function saying R2 isn't set up, which is not temporary.)
+        if (resp.status >= 500 && resp.status !== 503) failure.network = true;
+        throw failure;
       }
       return (await resp.json()).url;
     }

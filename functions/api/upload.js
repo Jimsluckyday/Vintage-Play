@@ -62,8 +62,22 @@ export async function onRequestPost({ request, env }) {
   if (file.size > MAX_BYTES) return json({ error: "Image is too large" }, 413);
 
   const key = `${crypto.randomUUID()}${ext}`;
-  await env.PHOTOS.put(key, await file.arrayBuffer(), {
-    httpMetadata: { contentType: file.type, cacheControl: "public, max-age=31536000, immutable" },
-  });
-  return json({ url: `${PHOTO_BASE_URL}/${key}`, key, size: file.size });
+  const bytes = await file.arrayBuffer();
+  // R2 now and then answers with a momentary internal error. An uncaught one
+  // used to surface as a bare "500" (and made the admin page give up on R2 for
+  // the whole session), so retry a couple of times and, if it still fails,
+  // answer with a readable JSON error the admin page can treat as temporary.
+  let lastErr;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await env.PHOTOS.put(key, bytes, {
+        httpMetadata: { contentType: file.type, cacheControl: "public, max-age=31536000, immutable" },
+      });
+      return json({ url: `${PHOTO_BASE_URL}/${key}`, key, size: file.size });
+    } catch (err) {
+      lastErr = err;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 400));
+    }
+  }
+  return json({ error: `R2 could not save the photo (${(lastErr && lastErr.message) || "unknown error"})` }, 502);
 }
