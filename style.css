@@ -1439,3 +1439,165 @@ header { position: relative; }
 @media (max-width: 600px) {
   .admin-tab { font-size: 1rem; padding: 0.4rem 0.65rem 0.35rem; }
 }
+
+/* ---- New Listings: compact photo-free list of the latest listings ---- */
+.new-arrivals-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  flex-wrap: wrap;
+  border-bottom: 3px solid var(--ink);
+  padding-bottom: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.filters button.new-listings {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+}
+
+.filters button.new-listings.active {
+  background: var(--teal);
+  border-color: var(--ink);
+  color: #fff;
+}
+
+.newlist-title {
+  font-family: 'Bangers', cursive;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  font-size: 1.4rem;
+  margin: 0 0 0.3rem;
+}
+
+.newlist-intro,
+.newlist-count {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  margin: 0 0 0.75rem;
+}
+
+.newlist-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.newlist-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+.newlist-controls select {
+  background: var(--bg-card);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  max-width: 100%;
+}
+
+.nl-table {
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: var(--bg-card);
+  overflow: hidden;
+  margin-bottom: 2rem;
+}
+
+.nl-row {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(9rem, 13rem) 1fr 9.5rem 5.5rem auto;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.nl-row:last-child { border-bottom: none; }
+
+.nl-row.nl-head {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.nl-cell { min-width: 0; font-size: 0.85rem; }
+
+.nl-head .nl-cell button {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  padding: 0.15rem 0;
+  text-align: left;
+}
+
+.nl-head .nl-cell button:hover { text-decoration: underline; }
+.nl-head .nl-cell { color: inherit; font-family: inherit; }
+.nl-head .nl-cond { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.nl-date { font-weight: 800; color: var(--ink-soft); }
+.nl-system { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--teal); font-weight: 800; }
+.nl-head .nl-date, .nl-head .nl-system { color: inherit; }
+
+.nl-titlecell { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem; }
+
+.nl-title {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.nl-title:hover { color: var(--teal); text-decoration: underline; }
+
+.nl-cond { font-size: 0.75rem; color: var(--ink-soft); font-weight: 700; }
+
+.nl-price { font-family: 'Alfa Slab One', serif; white-space: nowrap; }
+
+.nl-act .btn {
+  margin-top: 0;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.nl-row:not(.nl-head):hover { background: var(--bg); }
+
+@media (max-width: 760px) {
+  .nl-row.nl-head { display: none; }
+  .nl-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "title price"
+      "system date"
+      "cond act";
+    padding: 0.6rem 0.75rem;
+  }
+  .nl-titlecell { grid-area: title; }
+  .nl-price { grid-area: price; text-align: right; }
+  .nl-system { grid-area: system; }
+  .nl-date { grid-area: date; text-align: right; }
+  .nl-cond { grid-area: cond; }
+  .nl-act { grid-area: act; text-align: right; }
+}

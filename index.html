@@ -153,8 +153,40 @@
       <div class="letter-bar" id="letterBar"></div>
     </div>
     <div id="newArrivalsSection" hidden>
-      <h2 style="font-family:'Bangers',cursive;font-weight:400;letter-spacing:0.02em;font-size:1.4rem;border-bottom:3px solid var(--ink);padding-bottom:0.4rem;">New Arrivals</h2>
+      <div class="new-arrivals-head">
+        <h2 style="font-family:'Bangers',cursive;font-weight:400;letter-spacing:0.02em;font-size:1.4rem;margin:0;">New Arrivals</h2>
+        <button type="button" class="btn-link" id="seeNewListingsBtn">See every new listing (no photos) &rarr;</button>
+      </div>
       <div class="grid" id="newArrivalsGrid" style="margin-bottom:2rem;"></div>
+    </div>
+    <div id="newListSection" class="newlist" hidden>
+      <h2 class="newlist-title">New Listings</h2>
+      <p class="newlist-intro">The most recent listings, newest first, as a quick list with no photos. Tap a title to see pictures and details.</p>
+      <div class="newlist-controls">
+        <label>Show
+          <select id="nlCount">
+            <option value="25">last 25</option>
+            <option value="50" selected>last 50</option>
+            <option value="100">last 100</option>
+            <option value="200">last 200</option>
+          </select>
+        </label>
+        <label>System / category
+          <select id="nlSystem"><option value="">All</option></select>
+        </label>
+        <label>Sort by
+          <select id="nlSort">
+            <option value="date-desc">Date added (newest first)</option>
+            <option value="date-asc">Date added (oldest first)</option>
+            <option value="system-asc">System / category (A-Z)</option>
+            <option value="title-asc">Title (A-Z)</option>
+            <option value="price-asc">Price (low to high)</option>
+            <option value="price-desc">Price (high to low)</option>
+          </select>
+        </label>
+      </div>
+      <p class="newlist-count" id="nlCountNote" role="status"></p>
+      <div class="nl-table" id="nlTable" role="table" aria-label="New listings"></div>
     </div>
     <div class="grid" id="categoryGrid" hidden></div>
     <button class="btn secondary" id="backToBrandsBtn" hidden style="margin:0 0 1rem;">&larr; Back to publishers</button>
@@ -325,6 +357,9 @@
     // items. RARE_THRESHOLD also drives the RARE badge shown anywhere an
     // item appears on the site, independent of whether this view is open.
     const RARE_SLUG = "__rare__";
+    // "New Listings" is another pseudo-category: a compact, photo-free list of the most recently
+    // listed items across every category (see renderNewListView). Reachable as ?category=__new__.
+    const NEWLIST_SLUG = "__new__";
     // 49.99, not 50: every price ends in .99 (a $50 target is listed as $49.99),
     // and that top tier is exactly what should count as rare.
     const RARE_THRESHOLD = 49.99;
@@ -445,6 +480,7 @@
       const filtersEl = document.getElementById("filters");
       const options = [
         { slug: "all", label: "All" },
+        { slug: NEWLIST_SLUG, label: "New Listings", newlist: true },
         ...ALL_CATEGORIES.map((c) => ({ slug: c.slug, label: c.label })),
       ];
       // Placed right after Video Games specifically (not just appended) so it
@@ -467,7 +503,7 @@
           : opt.slug === "games"
             ? activeCategory === "games" && activeKind !== "consoles"
             : opt.slug === activeCategory;
-        btn.className = [isActive ? "active" : "", opt.rare ? "rare-finds" : ""]
+        btn.className = [isActive ? "active" : "", opt.rare ? "rare-finds" : "", opt.newlist ? "new-listings" : ""]
           .filter(Boolean)
           .join(" ");
         btn.addEventListener("click", () => {
@@ -740,8 +776,9 @@
       const el = document.getElementById("kindSwitch");
       const hint = document.getElementById("kindHint");
       const makerEl = document.getElementById("makerSwitch");
-      const extraKinds = activeCategory !== "all" && activeCategory !== RARE_SLUG ? extraKindTypes(activeCategory) : [];
-      const show = activeCategory !== "all" && activeCategory !== RARE_SLUG && (categoryHasConsoles(activeCategory) || extraKinds.length > 0);
+      const pseudo = activeCategory === "all" || activeCategory === RARE_SLUG || activeCategory === NEWLIST_SLUG;
+      const extraKinds = !pseudo ? extraKindTypes(activeCategory) : [];
+      const show = !pseudo && (categoryHasConsoles(activeCategory) || extraKinds.length > 0);
       if (!show) {
         el.hidden = true;
         makerEl.hidden = true;
@@ -942,6 +979,27 @@
       const treeEl = document.getElementById("categoryTree");
       const treeBackBtn = document.getElementById("treeBackBtn");
       const emptyNote = document.getElementById("emptyNote");
+
+      document.getElementById("newListSection").hidden = true;
+      if (activeCategory === NEWLIST_SLUG) {
+        // Photo-free "latest listings" view: hide every other layout and let it draw itself.
+        categoryGridEl.hidden = true;
+        brandGridEl.hidden = true;
+        treeEl.hidden = true;
+        gridEl.hidden = true;
+        listEl.hidden = true;
+        backBtn.hidden = true;
+        treeBackBtn.hidden = true;
+        emptyNote.hidden = true;
+        document.getElementById("sortSelect").hidden = true;
+        document.getElementById("newArrivalsSection").hidden = true;
+        document.getElementById("letterBar").innerHTML = "";
+        renderSubcatPicker();
+        renderGlobalSubcatPicker();
+        renderKindSwitch();
+        renderNewListView();
+        return;
+      }
 
       const searching = !!(searchTerm.trim() || activeLetter);
       const categoryBrands = currentCategoryBrands();
@@ -1255,6 +1313,189 @@
         gridEl.appendChild(card);
       });
     }
+
+    // ---- New Listings: compact, photo-free list of the latest listings ----
+    // When an item went live comes from items.listed_at (set by a database trigger when a held
+    // listing is released). Until that column exists the list falls back to created_at.
+    // Only ids + dates are fetched (a few small requests) and only the first time the view opens.
+    let newListDates = null; // Map: item id -> Date
+    let newListLoading = false;
+    let newListFailed = false;
+    const newListState = { count: 50, system: "", sortKey: "date", dir: "desc" };
+
+    async function loadNewListDates() {
+      if (newListDates || newListLoading) return;
+      newListLoading = true;
+      newListFailed = false;
+      let col = "listed_at";
+      let rows = [];
+      let offset = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data, error } = await supabaseClient
+          .from("items")
+          .select(`id, ${col}`)
+          .neq("status", "sold")
+          .is("on_hold_at", null)
+          .order(col, { ascending: false, nullsFirst: false })
+          .order("id", { ascending: true })
+          .range(offset, offset + pageSize - 1);
+        if (error) {
+          if (col === "listed_at") { col = "created_at"; rows = []; offset = 0; continue; }
+          newListFailed = true;
+          break;
+        }
+        rows = rows.concat(data);
+        if (data.length < pageSize) break;
+        offset += pageSize;
+      }
+      if (!newListFailed) {
+        newListDates = new Map(rows.map((r) => [r.id, new Date(r[col] || 0)]));
+      }
+      newListLoading = false;
+      if (activeCategory === NEWLIST_SLUG) renderGrid();
+    }
+
+    function newListSystemLabel(item) {
+      const brand = brandTagLabel(item.brand);
+      if (item.category === "games" && brand) return brand;
+      return brand ? `${categoryLabel(item.category)} · ${brand}` : categoryLabel(item.category);
+    }
+
+    function newListDayLabel(d) {
+      if (!d || !(d.getTime() > 0)) return "";
+      const startOf = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate());
+      const now = new Date();
+      const days = Math.round((startOf(now) - startOf(d)) / 86400000);
+      if (days <= 0) return "Today";
+      if (days === 1) return "Yesterday";
+      const opts = { month: "short", day: "numeric" };
+      if (d.getFullYear() !== now.getFullYear()) opts.year = "numeric";
+      return d.toLocaleDateString("en-CA", opts);
+    }
+
+    function newListRows() {
+      const term = searchTerm.trim().toLowerCase();
+      const dated = allItems.filter((i) => newListDates.has(i.id));
+      let list = dated.filter((i) => !term || (i.title || "").toLowerCase().includes(term));
+      if (newListState.system) list = list.filter((i) => newListSystemLabel(i) === newListState.system);
+      // The "last N" is always the N most recently listed; the sort below only reorders those.
+      list.sort((a, b) => newListDates.get(b.id) - newListDates.get(a.id) || titleKey(a).localeCompare(titleKey(b)));
+      list = list.slice(0, newListState.count);
+      const dir = newListState.dir === "asc" ? 1 : -1;
+      const byTitle = (a, b) => titleKey(a).localeCompare(titleKey(b));
+      const byDateDesc = (a, b) => newListDates.get(b.id) - newListDates.get(a.id) || byTitle(a, b);
+      const key = newListState.sortKey;
+      if (key === "date") list.sort((a, b) => dir * (newListDates.get(a.id) - newListDates.get(b.id)) || byTitle(a, b));
+      else if (key === "system") list.sort((a, b) => dir * newListSystemLabel(a).localeCompare(newListSystemLabel(b)) || byDateDesc(a, b));
+      else if (key === "title") list.sort((a, b) => dir * byTitle(a, b));
+      else if (key === "price") list.sort((a, b) => dir * (effectivePrice(a) - effectivePrice(b)) || byDateDesc(a, b));
+      return list;
+    }
+
+    function renderNewListView() {
+      const sectionEl = document.getElementById("newListSection");
+      const tableEl = document.getElementById("nlTable");
+      const noteEl = document.getElementById("nlCountNote");
+      sectionEl.hidden = false;
+      if (!newListDates) {
+        tableEl.innerHTML = "";
+        noteEl.textContent = newListFailed ? "Couldn't load the latest listings right now. Please refresh the page to try again." : "Loading the latest listings...";
+        if (!newListFailed) loadNewListDates();
+        return;
+      }
+
+      // System / category choices come from everything that is listed, with counts.
+      const counts = new Map();
+      allItems.forEach((i) => {
+        if (!newListDates.has(i.id)) return;
+        const label = newListSystemLabel(i);
+        counts.set(label, (counts.get(label) || 0) + 1);
+      });
+      if (newListState.system && !counts.has(newListState.system)) newListState.system = "";
+      const sysEl = document.getElementById("nlSystem");
+      sysEl.innerHTML =
+        `<option value="">All (${[...counts.values()].reduce((a, b) => a + b, 0)})</option>` +
+        [...counts.keys()]
+          .sort((a, b) => a.localeCompare(b))
+          .map((l) => `<option value="${escapeHtml(l)}">${escapeHtml(l)} (${counts.get(l)})</option>`)
+          .join("");
+      sysEl.value = newListState.system;
+      document.getElementById("nlCount").value = String(newListState.count);
+      document.getElementById("nlSort").value = `${newListState.sortKey}-${newListState.dir}`;
+
+      const rows = newListRows();
+      const arrow = (key) => (newListState.sortKey === key ? (newListState.dir === "asc" ? " ▲" : " ▼") : "");
+      const ariaSort = (key) => (newListState.sortKey === key ? (newListState.dir === "asc" ? "ascending" : "descending") : "none");
+      const head = (key, label, cls) =>
+        `<div class="nl-cell nl-h ${cls}" role="columnheader" aria-sort="${ariaSort(key)}"><button type="button" data-nl-sort="${key}">${label}${arrow(key)}</button></div>`;
+
+      let html =
+        `<div class="nl-row nl-head" role="row">` +
+        head("date", "Added", "nl-date") +
+        head("system", "System / category", "nl-system") +
+        head("title", "Title", "nl-titlecell") +
+        `<div class="nl-cell nl-h nl-cond" role="columnheader">Condition</div>` +
+        head("price", "Price", "nl-price") +
+        `<div class="nl-cell nl-h nl-act" role="columnheader"></div>` +
+        `</div>`;
+
+      rows.forEach((item) => {
+        const when = newListDates.get(item.id);
+        const cond = conditionTagLabel(item);
+        const badges =
+          (item.condition_grade === "New" ? `<span class="badge badge-new">NEW</span>` : "") +
+          (item.promo_at ? `<span class="badge badge-sale">SALE</span>` : "") +
+          discountBadgeHtml(item) +
+          (Number(item.asking_price) >= RARE_THRESHOLD ? `<span class="badge badge-rare">RARE</span>` : "");
+        html +=
+          `<div class="nl-row" role="row">` +
+          `<div class="nl-cell nl-date" role="cell" title="${escapeHtml(when.toLocaleString("en-CA"))}">${escapeHtml(newListDayLabel(when))}</div>` +
+          `<div class="nl-cell nl-system" role="cell">${escapeHtml(newListSystemLabel(item))}</div>` +
+          `<div class="nl-cell nl-titlecell" role="cell"><button type="button" class="nl-title" data-details="${item.id}">${escapeHtml(item.title)}</button>${badges}${item.quantity > 1 ? ` <span class="qty-note">${item.quantity} in stock</span>` : ""}</div>` +
+          `<div class="nl-cell nl-cond" role="cell">${escapeHtml(cond)}</div>` +
+          `<div class="nl-cell nl-price" role="cell">${priceHtml(item)}${item.status !== "available" ? ` <span class="status ${item.status}">${item.status.toUpperCase()}</span>` : ""}</div>` +
+          `<div class="nl-cell nl-act" role="cell"><button type="button" class="btn secondary" data-add-cart="${item.id}">Add to Cart</button></div>` +
+          `</div>`;
+      });
+      tableEl.innerHTML = rows.length ? html : "";
+      noteEl.textContent = rows.length
+        ? `Showing the ${rows.length} most recent listing${rows.length === 1 ? "" : "s"}${newListState.system ? ` in ${newListState.system}` : ""}${searchTerm.trim() ? ` matching "${searchTerm.trim()}"` : ""}.`
+        : "No listings match that.";
+    }
+
+    document.getElementById("seeNewListingsBtn").addEventListener("click", () => {
+      activeCategory = NEWLIST_SLUG;
+      resetDrilldown();
+      renderFilters();
+      renderGrid();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    document.getElementById("nlCount").addEventListener("change", (e) => {
+      newListState.count = Number(e.target.value) || 50;
+      renderGrid();
+    });
+    document.getElementById("nlSystem").addEventListener("change", (e) => {
+      newListState.system = e.target.value;
+      renderGrid();
+    });
+    document.getElementById("nlSort").addEventListener("change", (e) => {
+      const [key, dir] = e.target.value.split("-");
+      newListState.sortKey = key;
+      newListState.dir = dir;
+      renderGrid();
+    });
+    document.getElementById("newListSection").addEventListener("click", (e) => {
+      const sortBtn = e.target.closest("[data-nl-sort]");
+      if (sortBtn) {
+        const key = sortBtn.dataset.nlSort;
+        if (newListState.sortKey === key) newListState.dir = newListState.dir === "asc" ? "desc" : "asc";
+        else { newListState.sortKey = key; newListState.dir = key === "date" ? "desc" : "asc"; }
+        renderGrid();
+        return;
+      }
+      handleLightboxDelegate(e);
+    });
 
     function renderLetterBar(scopedItems) {
       const letterBarEl = document.getElementById("letterBar");
