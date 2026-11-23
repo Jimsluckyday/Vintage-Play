@@ -481,13 +481,10 @@
       const options = [
         { slug: "all", label: "All" },
         { slug: NEWLIST_SLUG, label: "New Listings", newlist: true },
+        // Rare Finds sits up front beside All and New Listings (it spans every category).
+        { slug: RARE_SLUG, label: "Rare Finds", rare: true },
         ...ALL_CATEGORIES.map((c) => ({ slug: c.slug, label: c.label })),
       ];
-      // Placed right after Video Games specifically (not just appended) so it
-      // stays next to it even if the category list's order changes later.
-      const gamesIndex = options.findIndex((o) => o.slug === "games");
-      const rareOption = { slug: RARE_SLUG, label: "Rare Finds", rare: true };
-      options.splice(gamesIndex === -1 ? options.length : gamesIndex + 1, 0, rareOption);
       // A Consoles shortcut right after Video Games, shown only once a console is actually for sale.
       if (consolesAvailable()) {
         const at = options.findIndex((o) => o.slug === "games");
