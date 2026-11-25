@@ -217,6 +217,7 @@
           <span class="tag" id="lbAge" hidden></span>
         </div>
         <p id="lbDescription" hidden></p>
+        <button type="button" class="btn-link lb-notes-btn" id="lbNotesBtn" data-notes-toggle="lbConditionNotes" aria-expanded="false" hidden>Condition notes &#9662;</button>
         <p class="lb-condition-notes" id="lbConditionNotes" hidden></p>
         <button type="button" class="btn secondary" id="lbAddCartBtn">Add to Cart</button>
         <div class="lb-variants" id="lbVariants" hidden></div>
@@ -1602,9 +1603,14 @@
       descEl.hidden = !item.description;
       descEl.textContent = item.description || "";
 
+      // Condition notes sit behind a small button so the listing leads with the photos and description.
       const notesEl = document.getElementById("lbConditionNotes");
-      notesEl.hidden = !item.condition_notes;
-      notesEl.textContent = item.condition_notes ? `Condition notes: ${item.condition_notes}` : "";
+      const notesBtn = document.getElementById("lbNotesBtn");
+      notesEl.hidden = true;
+      notesEl.textContent = item.condition_notes || "";
+      notesBtn.hidden = !item.condition_notes;
+      notesBtn.setAttribute("aria-expanded", "false");
+      notesBtn.innerHTML = "Condition notes &#9662;";
 
       document.getElementById("lightboxDetails").hidden = false;
       document.getElementById("lightbox").hidden = false;
@@ -1650,6 +1656,7 @@
       document.getElementById("lbPrice").hidden = true;
       document.getElementById("lbCondition").hidden = true;
       document.getElementById("lbConditionNotes").hidden = true;
+      document.getElementById("lbNotesBtn").hidden = true;
       document.getElementById("lbAddCartBtn").hidden = true;
 
       const ageEl = document.getElementById("lbAge");
@@ -1669,7 +1676,10 @@
           // issues needs to say so explicitly, or it reads as ambiguous next
           // to a sibling row whose issue IS spelled out (the whole point of
           // this view is making the difference between rows unmistakable).
-          const notesHtml = `<p class="lb-condition-notes">${escapeHtml(v.condition_notes || "No notable condition issues.")}</p>`;
+          // Each copy's notes sit behind a small button (not shown by default) so the rows lead with condition, price and photo.
+          const notesHtml = v.condition_notes
+            ? `<button type="button" class="btn-link lb-notes-btn" data-notes-toggle="lbn-${v.id}" aria-expanded="false">Condition notes &#9662;</button><p class="lb-condition-notes" id="lbn-${v.id}" hidden>${escapeHtml(v.condition_notes)}</p>`
+            : "";
           const actionHtml =
             v.status === "available"
               ? `<button type="button" class="btn secondary" data-add-cart="${v.id}">Add to Cart</button>`
@@ -1694,6 +1704,16 @@
       document.getElementById("lightboxDetails").hidden = false;
       document.getElementById("lightbox").hidden = false;
     }
+
+    document.getElementById("lightboxDetails").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-notes-toggle]");
+      if (!btn) return;
+      const panel = document.getElementById(btn.dataset.notesToggle);
+      if (!panel) return;
+      panel.hidden = !panel.hidden;
+      btn.setAttribute("aria-expanded", String(!panel.hidden));
+      btn.innerHTML = panel.hidden ? "Condition notes &#9662;" : "Condition notes &#9652;";
+    });
 
     document.getElementById("lbVariants").addEventListener("click", (e) => {
       const btn = e.target.closest("[data-variant-photo]");

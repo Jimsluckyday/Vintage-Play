@@ -1601,3 +1601,15 @@ header { position: relative; }
   .nl-cond { grid-area: cond; }
   .nl-act { grid-area: act; text-align: right; }
 }
+
+/* Condition notes sit behind a small button in the item details window */
+.lb-notes-btn {
+  display: block;
+  margin: 0 0 0.5rem;
+  padding: 0.25rem 0;
+  font-size: 0.85rem;
+}
+
+.lb-variant-row .lb-notes-btn {
+  margin: 0;
+}
