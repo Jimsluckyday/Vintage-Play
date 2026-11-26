@@ -80,7 +80,8 @@ async function createLink(env, { reference, lineItems, note, buyerEmail, redirec
   const body = {
     idempotency_key: crypto.randomUUID(),
     order: { location_id: env.SQUARE_LOCATION_ID, reference_id: reference, line_items: lineItems },
-    checkout_options: { redirect_url: redirect, allow_tipping: false, ask_for_shipping_address: false },
+    // Promo codes are applied in the site's own cart, so Square's coupon box is turned off.
+    checkout_options: { redirect_url: redirect, allow_tipping: false, ask_for_shipping_address: false, enable_coupon: false },
     payment_note: note.slice(0, 500),
   };
   if (buyerEmail) body.pre_populated_data = { buyer_email: buyerEmail };
