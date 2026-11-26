@@ -1943,6 +1943,7 @@
                 : `<button class="btn" data-order-sold="${order.id}">Record sale &amp; remove from inventory</button>`}
               <button class="btn" data-order-pick="${order.id}">Pick list</button>
               <button class="btn" data-order-receipt="${order.id}">Receipt</button>
+              ${order.inventory_removed_at ? "" : `<button class="btn secondary" data-order-cardlink="${order.id}" title="Make a Square debit/credit payment link for this order, with shipping">Card payment link</button>`}
               <button class="btn danger" data-order-delete="${order.id}">Delete</button>
             </div>
           </div>
@@ -1983,6 +1984,41 @@
           // Hand the order to receipt.html through this browser's storage (nothing goes in the URL).
           try { localStorage.setItem("vp_receipt_order", JSON.stringify(order)); } catch (e) { /* ignore */ }
           window.open("receipt.html?from=order", "_blank");
+        })
+      );
+      listEl.querySelectorAll("[data-order-cardlink]").forEach((btn) =>
+        btn.addEventListener("click", async () => {
+          const order = orders.find((o) => String(o.id) === btn.dataset.orderCardlink);
+          if (!order) return;
+          const itemsTotal = (order.items || []).reduce((t, i) => t + Number(i.price) * Number(i.qty || 1), 0);
+          const ans = prompt(`Card payment link for ${order.customer_name || "this order"}\nItems: $${itemsTotal.toFixed(2)}\n\nShipping to add (0 for pickup):`, "0");
+          if (ans === null) return;
+          const shipping = Number(String(ans).replace(/[^0-9.]/g, "")) || 0;
+          const { data } = await supabaseClient.auth.getSession();
+          if (!data.session) { alert("Please sign in again."); return; }
+          btn.disabled = true;
+          try {
+            const resp = await fetch("/api/square", {
+              method: "POST",
+              headers: { "content-type": "application/json", Authorization: `Bearer ${data.session.access_token}` },
+              body: JSON.stringify({
+                action: "link",
+                lines: (order.items || []).map((i) => ({ title: i.title, qty: i.qty, price: i.price })),
+                shipping,
+                reference: `VP-ORDER-${String(order.id).slice(0, 8).toUpperCase()}`,
+                customer: `${order.customer_name || ""} ${order.customer_contact || ""}`.trim(),
+                buyer_email: order.customer_contact || "",
+              }),
+            });
+            const res = await resp.json();
+            if (!resp.ok) throw new Error(res.error || `error ${resp.status}`);
+            try { await navigator.clipboard.writeText(res.url); } catch (e) { /* shown below anyway */ }
+            prompt(`Payment link for $${Number(res.total).toFixed(2)} (copied). Send it to the buyer:`, res.url);
+          } catch (e) {
+            alert(`Couldn't make the link: ${e.message}`);
+          } finally {
+            btn.disabled = false;
+          }
         })
       );
       listEl.querySelectorAll("[data-order-delete]").forEach((btn) =>

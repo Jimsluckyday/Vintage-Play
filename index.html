@@ -71,11 +71,15 @@
         </div>
         <p class="hint" id="cartPromoStatus" style="margin-top:0.3rem;"></p>
       </div>
-      <p class="hint">This isn't an automatic checkout — sending a request lets us know what you're after so we can arrange payment and pickup/shipping together.</p>
+      <p class="hint" id="cartHowItWorks">This isn't an automatic checkout — sending a request lets us know what you're after so we can arrange payment and pickup/shipping together.</p>
       <button type="button" class="btn-link" id="returnsToggleBtnCart">Returns &amp; Warranty policy</button>
 
       <div class="section" style="padding:0;margin:0.75rem 0;">
         <h3 style="font-size:0.95rem;margin:0 0 0.5rem;">How to Pay</h3>
+        <div class="pay-option" id="cardPayOption" hidden>
+          <span>Debit / credit card<br><small style="font-weight:400;">Local pickup orders, paid now on Square's secure page</small></span>
+          <button class="btn" id="cartCardBtn" style="margin-top:0;padding:0.3rem 0.7rem;font-size:0.8rem;">Pay by card</button>
+        </div>
         <div class="pay-option">
           <span>PayPal</span>
           <button class="btn secondary" id="cartPayBtn" style="margin-top:0;padding:0.3rem 0.7rem;font-size:0.8rem;">Pay with PayPal</button>
@@ -2133,6 +2137,108 @@
       if (total <= 0) return;
       window.open(`https://paypal.me/${PAYPAL_ME_HANDLE}/${total.toFixed(2)}`, "_blank");
     });
+
+    // ---- Debit / credit card (Square hosted checkout, local pickup) ----
+    // The card button only appears once Square is set up on the server (/api/square says enabled).
+    (async () => {
+      try {
+        const resp = await fetch("/api/square", { cache: "no-store" });
+        const info = resp.ok ? await resp.json() : null;
+        if (info && info.enabled) {
+          document.getElementById("cardPayOption").hidden = false;
+          document.getElementById("cartHowItWorks").textContent =
+            "Picking up locally? Pay by card right now. Want it shipped? Send an order request and we'll reply with the shipping cost and a card payment link (PayPal and e-Transfer work too).";
+        }
+      } catch (e) { /* no card option -- the other payment methods still work */ }
+    })();
+
+    document.getElementById("cartCardBtn").addEventListener("click", async () => {
+      const statusEl = document.getElementById("cartCopyStatus");
+      const btn = document.getElementById("cartCardBtn");
+      const lines = cartLines();
+      if (lines.length === 0) return;
+      const customer = {
+        name: document.getElementById("cartName").value.trim(),
+        contact: document.getElementById("cartContact").value.trim(),
+        notes: document.getElementById("cartNotes").value.trim(),
+      };
+      if (!customer.name || !customer.contact) {
+        statusEl.textContent = "Please add your name and an email or phone number below so we can arrange your pickup.";
+        document.getElementById("cartName").focus();
+        return;
+      }
+      if (!confirm("Card payment is for LOCAL PICKUP in Brampton, ON (we'll contact you to set a time).\n\nNeed it shipped? Cancel and use Send Order Request instead.\n\nContinue to Square's secure checkout?")) return;
+
+      btn.disabled = true;
+      statusEl.textContent = "Opening secure checkout...";
+      let result;
+      try {
+        const resp = await fetch("/api/square", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "cart",
+            items: lines.map(({ item, qty }) => ({ id: item.id, qty })),
+            promo_code: codePromo ? codePromo.code : "",
+            customer,
+          }),
+        });
+        result = await resp.json();
+        if (!resp.ok) throw new Error(result.error || "Checkout isn't available right now.");
+      } catch (e) {
+        btn.disabled = false;
+        statusEl.textContent = `${e.message} You can still send an order request or pay by PayPal / e-Transfer.`;
+        return;
+      }
+
+      // Log it in the order list and email the shop, the same as an order request.
+      const orderItems = result.lines.map((l) => ({ id: l.id, title: l.title, qty: l.qty, price: l.price, list_price: l.list_price }));
+      const discount = result.lines.reduce((t, l) => t + (l.list_price - l.price) * l.qty, 0);
+      const cardNote = `PAYING BY CARD (Square ref ${result.reference}) - LOCAL PICKUP. Check Square for the payment before handing over.`;
+      const { error: dbError } = await supabaseClient.from("orders").insert({
+        items: orderItems,
+        total: result.total,
+        customer_name: customer.name,
+        customer_contact: customer.contact,
+        customer_notes: customer.notes ? `${cardNote}\n${customer.notes}` : cardNote,
+        promo_code: result.promo_code,
+        discount_total: discount > 0.004 ? Math.round(discount * 100) / 100 : null,
+      });
+      try {
+        await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+          message: [
+            `CARD CHECKOUT STARTED - Square ref ${result.reference} (LOCAL PICKUP)`,
+            "Check Square for the payment; the buyer may not have finished paying.",
+            "",
+            `From: ${customer.name}`, `Contact: ${customer.contact}`, ...(customer.notes ? [`Notes: ${customer.notes}`] : []), "",
+            ...orderItems.map((l) => `${l.qty}x ${l.title} - $${Number(l.price).toFixed(2)} each`),
+            "", `Total: $${Number(result.total).toFixed(2)}`, ...(dbError ? ["", "(Couldn't save to the order log.)"] : []),
+          ].join("\n"),
+          to_email: ORDER_NOTIFY_EMAIL,
+          name: customer.name,
+          email: customer.contact.includes("@") ? customer.contact : "",
+        });
+      } catch (e) { /* Square still emails the shop when the payment goes through */ }
+
+      try { sessionStorage.setItem("vp_card_ref", result.reference); } catch (e) { /* ignore */ }
+      window.location.href = result.url;
+    });
+
+    // Back from Square after paying: empty the cart and say thanks.
+    (() => {
+      const ref = new URLSearchParams(location.search).get("paid");
+      if (!ref) return;
+      saveCart([]);
+      try { sessionStorage.removeItem("vp_card_ref"); } catch (e) { /* ignore */ }
+      const note = document.createElement("div");
+      note.setAttribute("role", "status");
+      note.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top, 0px) + 12px);z-index:9999;max-width:min(92vw,520px);background:#2f7d78;color:#fff;padding:0.85rem 1.1rem;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,0.25);font-weight:700;text-align:center;";
+      note.textContent = `Thank you! Your payment went through (order ${ref}). We'll contact you shortly to arrange pickup.`;
+      note.addEventListener("click", () => note.remove());
+      document.body.appendChild(note);
+      setTimeout(() => note.remove(), 15000);
+      history.replaceState(null, "", location.pathname);
+    })();
     document.getElementById("lightbox").addEventListener("click", closeLightbox);
     document.getElementById("lightboxClose").addEventListener("click", closeLightbox);
     document.addEventListener("keydown", (e) => {
